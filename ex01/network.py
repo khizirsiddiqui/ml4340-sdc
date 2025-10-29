@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 
 # The flag below controls whether to allow TF32 on matmul. This flag defaults to True.
@@ -41,7 +42,31 @@ class ClassificationNetwork(torch.nn.Module):
         super().__init__()
 
         # setting device on GPU if available, else CPU
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.set_device(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+
+        self.conv_layers = torch.nn.Sequential(
+            # input = bs x 3 x 96 x 96
+            nn.Conv2d(3, 8, kernel_size=5, stride=2),
+            nn.ReLU(),
+            # input = bs x 8 x 46 x 46
+            nn.Conv2d(8, 16, kernel_size=5, stride=2),
+            nn.ReLU(),
+            # input = bs x 16 x 21 x 21
+            nn.Flatten()
+        ).to(self.device)
+        self.fc_layers = torch.nn.Sequential(
+            # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
+            nn.Linear(21*21*16 + 7, 128),
+            nn.ReLU(),
+            nn.Linear(128, len(class_to_action))
+            # output = bs x C
+        ).to(self.device)
+
+    def set_device(self, device):
+        self.device = device
+
+    def get_device(self):
+        return self.device
 
     def forward(self, observation):
         """
@@ -51,7 +76,15 @@ class ClassificationNetwork(torch.nn.Module):
         observation:   torch.Tensor of size (batch_size, 96, 96, 3)
         return         torch.Tensor of size (batch_size, C)
         """
-        pass
+        batch_size = observation.shape[0]
+        speed, abs_sensors, steering, gyroscope = self.extract_sensor_values(observation, batch_size)
+        sensor_values = torch.cat([speed, abs_sensors, steering, gyroscope], dim=1).to(self.get_device())  # bs x 7
+        x = observation.permute(0, 3, 1, 2)  # to bs x C x H x W
+        x = x.to(self.get_device())
+        conv_out = self.conv_layers(x)
+        fc_input = torch.cat([conv_out, sensor_values], dim=1)
+        scores = self.fc_layers(fc_input)
+        return scores
 
     def actions_to_classes(self, actions):
         """
@@ -137,4 +170,13 @@ if __name__ == "__main__":
     mapped_actions = net.scores_to_action([torch.nn.functional.one_hot(c, num_classes=len(class_to_action)).float() for c in test_classes])
     print("Mapped back actions:", mapped_actions)
     assert all([torch.allclose(a, torch.tensor(ma)) for a, ma in zip(test_actions, mapped_actions)]), "Action to class mapping or back is incorrect."
+    print("Test passed!")
+    print()
+    print("Test2: forward pass")
+    batch_size = 4
+    dummy_observations = torch.randn(batch_size, 96, 96, 3)
+    dummy_scores = net.forward(dummy_observations)
+    print("Input observations shape:", dummy_observations.shape)
+    print("Output scores shape:", dummy_scores.shape)
+    assert dummy_scores.shape == (batch_size, len(class_to_action)), "Forward pass output shape is incorrect.(Expected ({}, {}), got {})".format(batch_size, len(class_to_action), dummy_scores.shape)
     print("Test passed!")
