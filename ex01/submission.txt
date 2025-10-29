@@ -1,5 +1,5 @@
-Team name:
-Name 1:
-Name 2:
+Team name: Drowsy Drivers
+Name 1: Mohd Khizir S.
+Name 2: Raffaele R.
 
 Score after running 'python main.py --score':

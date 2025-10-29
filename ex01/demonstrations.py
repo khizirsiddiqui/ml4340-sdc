@@ -18,7 +18,18 @@ def load_demonstrations(data_folder):
     observations:   python list of N numpy.ndarrays of size (96, 96, 3)
     actions:        python list of N numpy.ndarrays of size 3
     """
-    pass
+    observations = []
+    actions = []
+    for fd in os.listdir(data_folder):
+        if fd.endswith('.npy'):
+            if fd.startswith('observation_'):
+                data = np.load(os.path.join(data_folder, fd))
+                observations.append(data)
+                idx = fd.split('_')[1].split('.')[0]
+                data = np.load(os.path.join(data_folder, f'action_{idx}.npy'))
+                actions.append(data)
+    assert len(observations) == len(actions), "Number of observations and actions do not match."
+    return observations, actions
 
 
 def save_demonstrations(data_folder, actions, observations):
@@ -32,7 +43,16 @@ def save_demonstrations(data_folder, actions, observations):
     observations:   python list of N numpy.ndarrays of size (96, 96, 3)
     actions:        python list of N numpy.ndarrays of size 3
     """
-    pass
+    if not os.path.exists(data_folder):
+        os.makedirs(data_folder)
+    index = 0
+    for f in os.listdir(data_folder):
+        if f.endswith('.npy') and f.startswith('observation_'):
+            index += 1
+    save_path = os.path.join(data_folder, f'observation_{index:05d}.npy')
+    np.save(save_path, observations)
+    save_path = os.path.join(data_folder, f'action_{index:05d}.npy')
+    np.save(save_path, actions)
 
 
 class ControlStatus:
@@ -119,3 +139,37 @@ def record_demonstrations(demonstrations_folder):
         status.stop = False
 
     env.close()
+
+if __name__ == "__main__":
+    print("Idempotency Test of the save and load functions:")
+    print("Test1: Loading existing demonstrations from ./data")
+    data_folder = "./data"
+    obs, act = load_demonstrations(data_folder)
+    print("Size observations = ", len(obs), "x", obs[0].shape)
+    print("Size actions = ", len(act), "x", act[0].shape)
+    assert obs[0].shape == (96, 96, 3), "Loaded observations do not have the correct shape."
+    assert act[0].shape == (3,), "Loaded actions do not have the correct shape."
+    print("Test passed!")
+
+    print("Test2: Saving and loading dummy demonstrations")
+    dummy_folder = "/tmp/sdc-dummy-data"
+    if not os.path.exists(dummy_folder):
+        os.makedirs(dummy_folder)
+    for f in os.listdir(dummy_folder):
+        os.remove(os.path.join(dummy_folder, f))
+    obs, act = obs[0], act[0]
+    print("Saving single demonstration")
+    save_demonstrations(dummy_folder, act, obs)
+    print("Size observations = ", 1, "x", obs.shape)
+    print("Size actions = ", 1, "x", act.shape)
+    print("Loading the demonstration")
+    obs2, act2 = load_demonstrations(dummy_folder)
+    print("Size observations = ", len(obs2), "x", obs2[0].shape)
+    print("Size actions = ", len(act2), "x", act2[0].shape)
+    assert 1 == len(obs2), f"Saved (1) and loaded ({len(obs2)}) observations do not match in length."
+    assert 1 == len(act2), f"Saved (1) and loaded ({len(act2)}) actions do not match in length."
+    assert obs.shape == obs2[0].shape, "Saved and loaded observations do not match in shape. (" + str(obs.shape) + " vs " + str(obs2[0].shape) + ")"
+    assert act.shape == act2[0].shape, "Saved and loaded actions do not match in shape. (" + str(act.shape) + " vs " + str(act2[0].shape) + ")"
+    assert np.array_equal(obs, obs2[0]), "Saved and loaded observations do not match in content."
+    assert np.array_equal(act, act2[0]), "Saved and loaded actions do note match in content."
+    print("Test passed!")
