@@ -4,7 +4,7 @@
 #a) Define slurm job parameters
 ####
 
-#SBATCH --job-name=TutorialJob
+SBATCH --job-name=DrowsyDrivers_test0
 
 #resources:
 
@@ -26,22 +26,22 @@
 
 
 
-#SBATCH --error=job.%J.err
+SBATCH --error=job.%J.err
 # write the error output to job.*jobID*.err
 
-#SBATCH --output=job.%J.out
+SBATCH --output=job.%J.out
 # write the standard output to job.*jobID*.out
 
-#SBATCH --mail-type=ALL
+SBATCH --mail-type=ALL
 #write a mail if a job begins, ends, fails, gets requeued or stages out
 
-#SBATCH --mail-user=Your.Name@uni-tuebingen.de
+SBATCH --mail-user=mohd-khizir.siddiqui@student.uni-tuebingen.de
 # your mail address
 
 ####
 #c) Execute your file.
 ####
 
-singularity exec --nv ~/sdc_gym_amd64.simg python exercise_gym.py
+singularity exec --nv ~/sdc_gym_amd64.simg test.sh 
 
 echo DONE!
