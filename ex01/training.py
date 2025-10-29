@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import random
@@ -13,6 +14,11 @@ def train(data_folder, trained_network_file, args):
     """
     Function for training the network.
     """
+    # error out if trained_network_file already exists
+    if os.path.exists(trained_network_file):
+        raise FileExistsError(
+            f"The saved model already exists at \"{trained_network_file}\". Please remove it first."
+        )
     infer_action = ClassificationNetwork()
     optimizer = torch.optim.Adam(infer_action.parameters(), lr=args.lr)
 
