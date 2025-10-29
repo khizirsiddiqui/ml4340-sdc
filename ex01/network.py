@@ -131,12 +131,9 @@ class ClassificationNetwork(torch.nn.Module):
         scores:         python list of torch.Tensors of size C
         return          (float, float, float)
         """
-        actions = []
-        for score in scores:
-            class_idx = torch.argmax(score).item()
-            class_name = index_class[class_idx]
-            actions.append(class_to_action[class_name])
-        return actions
+        class_idx = torch.argmax(scores).item()
+        class_name = index_class[class_idx]
+        return class_to_action[class_name]
 
     def extract_sensor_values(self, observation, batch_size):
         # just approximately normalized, usually this suffices.
@@ -158,7 +155,7 @@ class ClassificationNetwork(torch.nn.Module):
         return speed, abs_sensors.reshape(batch_size, 4), steering, gyroscope
 
 if __name__ == "__main__":
-    print("Test1: class action mappings")
+    print("Test1: Invertibility of class action mappings")
     net = ClassificationNetwork()
     test_actions = [torch.tensor([0.0, 0.0, 0.0]),
                     torch.tensor([-1.0, 0.5, 0.0]),
@@ -167,7 +164,13 @@ if __name__ == "__main__":
     test_classes = net.actions_to_classes(test_actions)
     print("Actions:", test_actions)
     print("Mapped classes:", test_classes)
-    mapped_actions = net.scores_to_action([torch.nn.functional.one_hot(c, num_classes=len(class_to_action)).float() for c in test_classes])
+    mapped_actions = []
+    for scores in test_classes:
+        class_scores = torch.zeros(len(class_to_action))
+        class_scores[scores.item()] = 1
+        action = net.scores_to_action(class_scores)
+        print("Scores:", scores, "Mapped action:", action)
+        mapped_actions.append(action)
     print("Mapped back actions:", mapped_actions)
     assert all([torch.allclose(a, torch.tensor(ma)) for a, ma in zip(test_actions, mapped_actions)]), "Action to class mapping or back is incorrect."
     print("Test passed!")
