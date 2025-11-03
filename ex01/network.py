@@ -26,8 +26,6 @@ class_to_action = {
     "brake": [0.0, 0.0, 1.0],
     "steer_left_gas": [-1.0, 0.5, 0.0],
     "steer_right_gas": [1.0, 0.5, 0.0],
-    "steer_left_brake": [-1.0, 0.0, 0.5],
-    "steer_right_brake": [1.0, 0.0, 0.5],
 }
 class_index = {k: i for i, k in enumerate(class_to_action.keys())}
 index_class = {i: k for i, k in enumerate(class_to_action.keys())}
@@ -41,32 +39,42 @@ class ClassificationNetwork(torch.nn.Module):
         """
         super().__init__()
 
-        # setting device on GPU if available, else CPU
-        self.set_device(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        self.device = None
 
         self.conv_layers = torch.nn.Sequential(
-            # input = bs x 3 x 96 x 96
-            nn.Conv2d(3, 8, kernel_size=5, stride=2),
+            # input = bs x 1 x 96 x 96
+            nn.Conv2d(1, 8, kernel_size=5, stride=2),
             nn.ReLU(),
             # input = bs x 8 x 46 x 46
             nn.Conv2d(8, 16, kernel_size=5, stride=2),
             nn.ReLU(),
             # input = bs x 16 x 21 x 21
             nn.Flatten()
-        ).to(self.device)
+        )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
             nn.Linear(21*21*16 + 7, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action))
             # output = bs x C
-        ).to(self.device)
-
-    def set_device(self, device):
-        self.device = device
+        )
 
     def get_device(self):
+        if self.device is None:
+            self.device = self.fc_layers[-1].weight.device
         return self.device
+
+
+    def grayscale(self, x):
+        """
+        Converts a batch of RGB images to grayscale using the luminosity method.
+        x:   torch.Tensor of size (batch_size, 3, H, W)
+        return torch.Tensor of size (batch_size, 1, H, W)
+        """
+        mat = torch.tensor([0.2989, 0.5870, 0.1140], device=self.get_device()).reshape(1, 3, 1, 1)
+        gray = x * mat
+        gray = gray.sum(dim=1, keepdim=True)
+        return gray
 
     def forward(self, observation):
         """
@@ -80,7 +88,7 @@ class ClassificationNetwork(torch.nn.Module):
         speed, abs_sensors, steering, gyroscope = self.extract_sensor_values(observation, batch_size)
         sensor_values = torch.cat([speed, abs_sensors, steering, gyroscope], dim=1).to(self.get_device())  # bs x 7
         x = observation.permute(0, 3, 1, 2)  # to bs x C x H x W
-        x = x.to(self.get_device())
+        x = self.grayscale(x)                # to bs x 1 x H x W
         conv_out = self.conv_layers(x)
         fc_input = torch.cat([conv_out, sensor_values], dim=1)
         scores = self.fc_layers(fc_input)
@@ -100,12 +108,7 @@ class ClassificationNetwork(torch.nn.Module):
             steer, gas, brake = action.tolist()
             class_name = "no_action"
             if brake > 0.0:
-                if steer < 0.0:
-                    class_name = "steer_left_brake"
-                elif steer > 0.0:
-                    class_name = "steer_right_brake"
-                else:
-                    class_name = "brake"
+                class_name = "brake"
             else:
                 if gas > 0.0:
                     if steer < 0.0:
@@ -157,10 +160,7 @@ class ClassificationNetwork(torch.nn.Module):
 if __name__ == "__main__":
     print("Test1: Invertibility of class action mappings")
     net = ClassificationNetwork()
-    test_actions = [torch.tensor([0.0, 0.0, 0.0]),
-                    torch.tensor([-1.0, 0.5, 0.0]),
-                    torch.tensor([1.0, 0.0, 0.0]),
-                    torch.tensor([0.0, 0.0, 1.0])]
+    test_actions = [torch.tensor(x) for _, x in class_to_action.items()]
     test_classes = net.actions_to_classes(test_actions)
     print("Actions:", test_actions)
     print("Mapped classes:", test_classes)
@@ -177,7 +177,8 @@ if __name__ == "__main__":
     print()
     print("Test2: forward pass")
     batch_size = 4
-    dummy_observations = torch.randn(batch_size, 96, 96, 3)
+    num_channels = 3
+    dummy_observations = torch.randn(batch_size, 96, 96, num_channels)
     dummy_scores = net.forward(dummy_observations)
     print("Input observations shape:", dummy_observations.shape)
     print("Output scores shape:", dummy_scores.shape)
