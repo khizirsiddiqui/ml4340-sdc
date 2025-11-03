@@ -53,7 +53,8 @@ class ClassificationNetwork(torch.nn.Module):
         )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
-            nn.Linear(21*21*16 + 7, 128),
+            # nn.Linear(21*21*16 + 7, 128),
+            nn.Linear(21*21*16, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action))
             # output = bs x C
@@ -89,8 +90,9 @@ class ClassificationNetwork(torch.nn.Module):
         x = observation.permute(0, 3, 1, 2)  # to bs x C x H x W
         x = self.grayscale(x)                # to bs x 1 x H x W
         conv_out = self.conv_layers(x)
-        fc_input = torch.cat([conv_out, sensor_values], dim=1)
-        scores = self.fc_layers(fc_input)
+        # fc_input = torch.cat([conv_out, sensor_values], dim=1)
+        # scores = self.fc_layers(fc_input)
+        scores = self.fc_layers(conv_out)
         return scores
 
     def actions_to_classes(self, actions):
