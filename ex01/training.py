@@ -34,6 +34,7 @@ def train(data_folder, trained_network_file, args):
 
     # setting device on GPU if available, else CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    infer_action.to(device)
 
     nr_epochs = args.nr_epochs
     batch_size = args.batch_size
@@ -71,3 +72,35 @@ def train(data_folder, trained_network_file, args):
             epoch + 1, total_loss, time_left))
 
     torch.save(infer_action, trained_network_file)
+
+if __name__ == "__main__":
+    print("Test1: training function")
+    class Args:
+        lr = 0.001
+        nr_epochs = 1
+        batch_size = 32
+    args = Args()
+    import shutil
+    if os.path.exists("/tmp/dummydata"):
+        shutil.rmtree("/tmp/dummydata")
+    fl_list = os.listdir("data")
+    count = 1
+    for fl in fl_list:
+        if count == 0:
+            break
+        fl_type = fl.split('_')[0]
+        idx = fl.split('_')[1].split('.')[0]
+        if fl_type == 'observation':
+            fl2 = f'action_{idx}.npy'
+        else:
+            fl2 = f'observation_{idx}.npy'
+        if not os.path.exists("/tmp/dummydata"):
+            os.makedirs("/tmp/dummydata")
+        shutil.copy(os.path.join("data", fl),
+                    os.path.join("/tmp/dummydata", fl))
+        shutil.copy(os.path.join("data", fl2),
+                    os.path.join("/tmp/dummydata", fl2))
+        count -= 1
+
+    train("/tmp/dummydata", "/tmp/trained_network.pth", args)
+

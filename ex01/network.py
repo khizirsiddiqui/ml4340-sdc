@@ -60,8 +60,7 @@ class ClassificationNetwork(torch.nn.Module):
         )
 
     def get_device(self):
-        if self.device is None:
-            self.device = self.fc_layers[-1].weight.device
+        self.device = self.fc_layers[-1].weight.device
         return self.device
 
 
