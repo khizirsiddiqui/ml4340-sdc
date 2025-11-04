@@ -29,6 +29,15 @@ def train(data_folder, trained_network_file, args):
     observations = [torch.Tensor(observation) for observation in observations]
     actions = [torch.Tensor(action) for action in actions]
 
+    # augmentation: gaussian noise
+    # add small gaussian noise to each observation
+    max_observation = torch.max(torch.stack(observations))
+    min_observation = torch.min(torch.stack(observations))
+    for i in range(len(observations)):
+        noise = torch.randn_like(observations[i]) * 0.01
+        observations[i] += noise
+        observations[i] = torch.clamp(observations[i], min_observation, max_observation)
+
     batches = [batch for batch in zip(observations,
                                       infer_action.actions_to_classes(actions))]
 

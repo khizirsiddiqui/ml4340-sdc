@@ -49,12 +49,11 @@ class ClassificationNetwork(torch.nn.Module):
             nn.Conv2d(8, 16, kernel_size=5, stride=2),
             nn.ReLU(),
             # input = bs x 16 x 21 x 21
-            nn.Flatten()
         )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
-            # nn.Linear(21*21*16 + 7, 128),
-            nn.Linear(21*21*16, 128),
+            nn.Linear(21*21*16 + 7, 128),
+            # nn.Linear(21*21*16, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action))
             # output = bs x C
@@ -89,10 +88,10 @@ class ClassificationNetwork(torch.nn.Module):
         sensor_values = torch.cat([speed, abs_sensors, steering, gyroscope], dim=1).to(self.get_device())  # bs x 7
         x = observation.permute(0, 3, 1, 2)  # to bs x C x H x W
         x = self.grayscale(x)                # to bs x 1 x H x W
+        x = self.crop_out_sensor_values(x)   # to bs x 1 x (H - cropped_h) x (W - cropped_w)
         conv_out = self.conv_layers(x)
-        # fc_input = torch.cat([conv_out, sensor_values], dim=1)
-        # scores = self.fc_layers(fc_input)
-        scores = self.fc_layers(conv_out)
+        fc_input = torch.cat([nn.Flatten()(conv_out), sensor_values], dim=1)
+        scores = self.fc_layers(fc_input)
         return scores
 
     def actions_to_classes(self, actions):
@@ -138,6 +137,15 @@ class ClassificationNetwork(torch.nn.Module):
         class_idx = torch.argmax(scores).item()
         class_name = index_class[class_idx]
         return class_to_action[class_name]
+
+    def crop_out_sensor_values(self, observation):
+        """
+        Crops out the region of the observation that contains the sensor values and returns the new observations.
+        observation:   torch.Tensor of size (batch_size, 96, 96, 3)
+        return         torch.Tensor of size (batch_size, 96 - cropped_height, 96 - cropped_width, 3)
+        """
+        observation[:, 84:94, 0:25, :] = 0.0
+        return observation
 
     def extract_sensor_values(self, observation, batch_size):
         # just approximately normalized, usually this suffices.
