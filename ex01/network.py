@@ -44,9 +44,11 @@ class ClassificationNetwork(torch.nn.Module):
         self.conv_layers = torch.nn.Sequential(
             # input = bs x 1 x 96 x 96
             nn.Conv2d(1, 8, kernel_size=5, stride=2),
+            nn.BatchNorm2d(8),
             nn.ReLU(),
             # input = bs x 8 x 46 x 46
             nn.Conv2d(8, 16, kernel_size=5, stride=2),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             # input = bs x 16 x 21 x 21
         )

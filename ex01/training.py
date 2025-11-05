@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+from torch.optim.lr_scheduler import ReduceLROnPlateau 
 import random
 import time
 from network import ClassificationNetwork
@@ -21,6 +22,7 @@ def train(data_folder, trained_network_file, args):
         )
     infer_action = ClassificationNetwork()
     optimizer = torch.optim.Adam(infer_action.parameters(), lr=args.lr)
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
 
     #Loss function
     loss_function = nn.CrossEntropyLoss()
@@ -28,15 +30,6 @@ def train(data_folder, trained_network_file, args):
     observations, actions = load_demonstrations(data_folder)
     observations = [torch.Tensor(observation) for observation in observations]
     actions = [torch.Tensor(action) for action in actions]
-
-    # augmentation: gaussian noise
-    # add small gaussian noise to each observation
-    max_observation = torch.max(torch.stack(observations))
-    min_observation = torch.min(torch.stack(observations))
-    for i in range(len(observations)):
-        noise = torch.randn_like(observations[i]) * 0.01
-        observations[i] += noise
-        observations[i] = torch.clamp(observations[i], min_observation, max_observation)
 
     batches = [batch for batch in zip(observations,
                                       infer_action.actions_to_classes(actions))]
@@ -59,6 +52,16 @@ def train(data_folder, trained_network_file, args):
             batch_in.append(batch[0].to(device))
             batch_gt.append(batch[1].to(device))
 
+            # augmentation: gaussian noise
+            # add small gaussian noise to each observation
+            max_observation = torch.max(torch.stack(batch_in))
+            min_observation = torch.min(torch.stack(batch_in))
+            for i in range(len(batch_in)):
+                noise = torch.randn_like(batch_in[i]) * 0.01
+                batch_in[i] += noise
+                batch_in[i] = torch.clamp(batch_in[i], min_observation, max_observation)
+
+
             if (batch_idx + 1) % batch_size == 0 or batch_idx == len(batches) - 1:
                 batch_in = torch.reshape(torch.cat(batch_in, dim=0),
                                          (-1, 96, 96, 3))
@@ -75,10 +78,12 @@ def train(data_folder, trained_network_file, args):
                 batch_in = []
                 batch_gt = []
 
+        lr_scheduler.step(total_loss)
+
         time_per_epoch = (time.time() - start_time) / (epoch + 1)
         time_left = (1.0 * time_per_epoch) * (nr_epochs - 1 - epoch)
-        print("Epoch %5d\t[Train]\tloss: %.6f \tETA: +%fs" % (
-            epoch + 1, total_loss, time_left))
+        print("Epoch %5d\t[Train]\tloss: %.6f \tETA: +%fs \tLR: %.6f" % (
+            epoch + 1, total_loss, time_left, optimizer.param_groups[0]['lr']))
 
     torch.save(infer_action, trained_network_file)
 
@@ -92,6 +97,8 @@ if __name__ == "__main__":
     import shutil
     if os.path.exists("/tmp/dummydata"):
         shutil.rmtree("/tmp/dummydata")
+    if os.path.exists("/tmp/trained_network.pth"):
+        os.remove("/tmp/trained_network.pth")
     fl_list = os.listdir("data")
     count = 1
     for fl in fl_list:
