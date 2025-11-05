@@ -38,12 +38,6 @@
 #c) Execute your file.
 ####
 
-start_time=$(date +%s)
 singularity exec --nv ~/sdc_gym_amd64.simg bash -x script.sh
-t3=$(date +%s)
-total_elapsed=$(( t3 - start_time ))
-echo ">> Sending notification to tg.."
-cd ~/util-scripts && bash send_tg.sh "Training and evaluation completed in $total_elapsed seconds."
-echo "== Notification sent."
 
 echo DONE!

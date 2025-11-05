@@ -29,15 +29,6 @@ def train(data_folder, trained_network_file, args):
     observations = [torch.Tensor(observation) for observation in observations]
     actions = [torch.Tensor(action) for action in actions]
 
-    # augmentation: gaussian noise
-    # add small gaussian noise to each observation
-    max_observation = torch.max(torch.stack(observations))
-    min_observation = torch.min(torch.stack(observations))
-    for i in range(len(observations)):
-        noise = torch.randn_like(observations[i]) * 0.01
-        observations[i] += noise
-        observations[i] = torch.clamp(observations[i], min_observation, max_observation)
-
     batches = [batch for batch in zip(observations,
                                       infer_action.actions_to_classes(actions))]
 
@@ -63,6 +54,13 @@ def train(data_folder, trained_network_file, args):
                 batch_in = torch.reshape(torch.cat(batch_in, dim=0),
                                          (-1, 96, 96, 3))
                 batch_gt = torch.reshape(torch.cat(batch_gt, dim=0), (-1, ))
+
+                # augmentation: gaussian noise
+                # add small gaussian noise to each observation in the batch
+                max_observation = torch.max(batch_in)
+                min_observation = torch.min(batch_in)
+                noise = torch.randn(batch_in.shape).to(device) * 0.01 * (max_observation - min_observation)
+                batch_in = batch_in + noise
 
                 batch_out = infer_action(batch_in)
                 loss = loss_function(batch_out, batch_gt)
@@ -92,6 +90,8 @@ if __name__ == "__main__":
     import shutil
     if os.path.exists("/tmp/dummydata"):
         shutil.rmtree("/tmp/dummydata")
+    if os.path.exists("/tmp/trained_network.pth"):
+        os.remove("/tmp/trained_network.pth")
     fl_list = os.listdir("data")
     count = 1
     for fl in fl_list:
