@@ -45,7 +45,7 @@ class ClassificationNetwork(torch.nn.Module):
 
         self.conv_layers = torch.nn.Sequential(
             # input = bs x 1 x 96 x 96
-            nn.Conv2d(3, 16, kernel_size=5, stride=2),
+            nn.Conv2d(1, 16, kernel_size=5, stride=2),
             nn.ReLU(),
             # input = bs x 8 x 46 x 46
             nn.Conv2d(16, 32, kernel_size=5, stride=2),
@@ -54,7 +54,7 @@ class ClassificationNetwork(torch.nn.Module):
         )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*32 + 7) (from conv + sensors)
-            nn.Linear(21*21*32, 128),
+            nn.Linear(21*21*32 + 7, 128),
             # nn.Linear(21*21*16, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action)),
@@ -81,18 +81,18 @@ class ClassificationNetwork(torch.nn.Module):
     def grayscale(self, x):
         """
         Converts a batch of RGB images to grayscale using the luminosity method.
-        x:   torch.Tensor of size (batch_size, 3, H, W)
+        x:   torch.Tensor of size (batch_size, H, W, 3)
         return torch.Tensor of size (batch_size, 1, H, W)
         """
-        mat = torch.tensor([0.2989, 0.5870, 0.1140], device=self.get_device()).reshape(1, 3, 1, 1)
-        gray = x * mat
-        gray = gray.sum(dim=1, keepdim=True)
+        r, g, b = x[:, :, :, 0], x[:, :, :, 1], x[:, :, :, 2]
+        gray = 0.21 * r + 0.72 * g + 0.07 * b
+        gray = gray.unsqueeze(-1)  # to bs x H x W x 1
         return gray
 
     def preprocessing(self, observation):
         x = observation
-        # x = self.grayscale(x)                # to bs x 1 x H x W
-        # x = self.crop_out_sensor_values(x)   # zeros out the sensor values
+        x = self.grayscale(x)                  # to bs x H x W x 1
+        x = self.crop_out_sensor_values(x)     # zeros out the sensor values
         return x
 
     def display_sample_observation(self, observation):
@@ -100,18 +100,26 @@ class ClassificationNetwork(torch.nn.Module):
         if len(observation.shape) == 3:
             observation = observation.unsqueeze(0)
         bs = observation.shape[0]
-        sample = observation[np.random.randint(10, bs)]
-        sensor_values = self.extract_sensor_values(sample.unsqueeze(0), 1)
-        preprocessed = self.preprocessing(sample.unsqueeze(0).clone())
+        sample = observation
+        sensor_values = self.extract_sensor_values(sample, 1)
+        preprocessed = self.preprocessing(sample.clone())
         import matplotlib.pyplot as plt
         fig, axs = plt.subplots(1, 2, figsize=(16, 9))
-        axs[0].imshow(sample.numpy().astype(np.uint8))
+        print("Preprocessed shape:", preprocessed.shape)
+        if preprocessed.shape[3] == 1:
+            cmp = 'gray'
+        else:
+            cmp = None
+        axs[0].imshow(sample[0].numpy().astype(np.uint8))
         axs[0].set_title("Original observation")
         axs[0].axis('off')
-        axs[1].imshow(preprocessed[0].cpu().numpy().astype(np.uint8))
+        axs[1].imshow(preprocessed[0].cpu().numpy().astype(np.uint8), cmap=cmp)
         axs[1].set_title("Preprocessed observation")
         axs[1].axis('off')
-        print("Extracted sensor values (normalized):", sensor_values.cpu().numpy())
+        speed, abs_sensors, steering, gyroscope = sensor_values[0, 0], sensor_values[0, 1:5], sensor_values[0, 5], sensor_values[0, 6]
+        print("Extracted sensor values (raw): speed: {:.3f}, abs_sensors: {}, steering: {:.3f}, gyroscope: {:.3f}".format(
+            speed.item(), abs_sensors.cpu().numpy(), steering.item(), gyroscope.item()
+        ))
         plt.show()
 
     def display_n_observation(self, observation, N=12):
@@ -148,11 +156,13 @@ class ClassificationNetwork(torch.nn.Module):
         return         torch.Tensor of size (batch_size, C)
         """
         batch_size = observation.shape[0]
+        sensor_values = self.extract_sensor_values(observation, batch_size)
         x = self.preprocessing(observation)
         x = x.permute(0, 3, 1, 2)  # to bs x C x H x W
         conv_out = self.conv_layers(x)
         flat_conv = conv_out.reshape(batch_size, -1)
-        fc_out = self.fc_layers(flat_conv)
+        fc_in = torch.cat([flat_conv, sensor_values], dim=1)
+        fc_out = self.fc_layers(fc_in)
 
         return fc_out 
 
@@ -247,6 +257,7 @@ if __name__ == "__main__":
     assert all([torch.allclose(a, torch.tensor(ma)) for a, ma in zip(test_actions, mapped_actions)]), "Action to class mapping or back is incorrect."
     print("Test passed!")
     print()
+
     print("Test2: forward pass")
     batch_size = 4
     num_channels = 3
@@ -260,16 +271,20 @@ if __name__ == "__main__":
     assert dummy_scores.shape == (batch_size, len(class_to_action)), "Forward pass output shape is incorrect.(Expected ({}, {}), got {})".format(batch_size, len(class_to_action), dummy_scores.shape)
     print("Test passed!")
     print()
+
     # # load one observation from ./data folder for visualization
     # # disabled by default, used for debugging only
     # print("Test3: Display sample observation preprocessing")
     # data_folder = "./data"
-    # sample_image_path = os.path.join(data_folder, "observation_00001.npy")
+    # # pick a sample observation_xxxxxx.npy file from data_folder
+    # index = np.random.choice([f for f in os.listdir(data_folder) if f.startswith("observation_") and f.endswith(".npy")])
+    # sample_image_path = os.path.join(data_folder, index)
     # sample_observation = np.load(sample_image_path)
     # dummy_observations = torch.tensor(sample_observation)
     # net.display_sample_observation(dummy_observations)
     # print("Test complete.")
     # print()
+
     # # load 12 observation from ./data folder for visualization
     # # disabled by default, used for debugging only
     # print("Test4: Display 10 sample observation preprocessing")
