@@ -51,6 +51,7 @@ class ClassificationNetwork(torch.nn.Module):
             nn.ReLU(),
             # input = bs x 16 x 21 x 21
         )
+        self.flatten = nn.Flatten()
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
             nn.Linear(21*21*16 + 7, 128),
@@ -59,9 +60,10 @@ class ClassificationNetwork(torch.nn.Module):
             nn.Linear(128, len(class_to_action)),
             # output = bs x C
         )
-        self.out_head = torch.nn.Sequential(
-            nn.Softmax(dim=0)
-        )
+        # not needed if using CrossEntropyLoss
+        # self.out_head = torch.nn.Sequential(
+        #     nn.Softmax(dim=1)
+        # )
         self.init_parameters()
 
     def init_parameters(self):
@@ -90,7 +92,7 @@ class ClassificationNetwork(torch.nn.Module):
     def preprocessing(self, observation):
         x = observation
         # x = self.grayscale(x)                # to bs x 1 x H x W
-        x = self.crop_out_sensor_values(x)   # to bs x 1 x (H - cropped_h) x (W - cropped_w)
+        # x = self.crop_out_sensor_values(x)     # zeros out the sensor values
         return x
 
     def display_sample_observation(self, observation):
@@ -99,6 +101,7 @@ class ClassificationNetwork(torch.nn.Module):
             observation = observation.unsqueeze(0)
         bs = observation.shape[0]
         sample = observation[np.random.randint(10, bs)]
+        sensor_values = self.extract_sensor_values(sample.unsqueeze(0), 1)
         preprocessed = self.preprocessing(sample.unsqueeze(0).clone())
         import matplotlib.pyplot as plt
         fig, axs = plt.subplots(1, 2, figsize=(16, 9))
@@ -108,6 +111,7 @@ class ClassificationNetwork(torch.nn.Module):
         axs[1].imshow(preprocessed[0].cpu().numpy().astype(np.uint8))
         axs[1].set_title("Preprocessed observation")
         axs[1].axis('off')
+        print("Extracted sensor values (normalized):", sensor_values.cpu().numpy())
         plt.show()
 
     def display_n_observation(self, observation, N=12):
@@ -149,10 +153,10 @@ class ClassificationNetwork(torch.nn.Module):
         conv_out = self.conv_layers(x)
 
         sensor_values = self.extract_sensor_values(observation, batch_size).to(self.get_device()) 
-        fc_input = torch.cat([nn.Flatten()(conv_out), sensor_values], dim=1)
+        fc_input = torch.cat([self.flatten(conv_out), sensor_values], dim=1)
         fc_out = self.fc_layers(fc_input)
 
-        return self.out_head(fc_out)
+        return fc_out 
 
     def actions_to_classes(self, actions):
         """

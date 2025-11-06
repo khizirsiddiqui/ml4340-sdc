@@ -71,12 +71,18 @@ def train(data_folder, trained_network_file, args):
                 print("    Batch %5d/%5d\t loss: %.6f" % (
                     batch_idx + 1, len(batches), loss.item()))
                 # debug: the gradients for the network are non-zero
+                grad_norm_zero = False
                 for name, param in infer_action.named_parameters():
                     if param.grad is not None:
                         grad_norm = torch.norm(param.grad).item()
                         if grad_norm == 0.0:
+                            grad_norm_zero = True
                             print("Warning: zero gradient norm for parameter ",
                                   name)
+                if grad_norm_zero:
+                    # debug: print sample batch_gt and the corresponding batch_out
+                    print("    Sample batch_gt: ", batch_gt[:5].cpu().numpy())
+                    print("    Sample batch_out: ", torch.argmax(batch_out[:5].detach(), dim=1).cpu().numpy())
 
         time_per_epoch = (time.time() - start_time) / (epoch + 1)
         time_left = (1.0 * time_per_epoch) * (nr_epochs - 1 - epoch)

@@ -40,4 +40,12 @@
 
 singularity exec --nv ~/sdc_gym_amd64.simg bash -x script.sh
 
+# send telegram notification with SLURM JOB_ID and total time
+job_id=${SLURM_JOB_ID:-"N/A"}
+job_name=${SLURM_JOB_NAME:-"N/A"}
+MESSAGE="Job ID: $job_id, Job Name: $job_name, Total Time: $total_elapsed seconds."
+cd ~/util-scripts
+bash send_tg.sh "$MESSAGE"
+echo
+
 echo DONE!
