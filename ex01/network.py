@@ -92,7 +92,7 @@ class ClassificationNetwork(torch.nn.Module):
     def preprocessing(self, observation):
         x = observation
         # x = self.grayscale(x)                # to bs x 1 x H x W
-        # x = self.crop_out_sensor_values(x)     # zeros out the sensor values
+        # x = self.crop_out_sensor_values(x)   # zeros out the sensor values
         return x
 
     def display_sample_observation(self, observation):
