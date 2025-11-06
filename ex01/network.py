@@ -44,17 +44,17 @@ class ClassificationNetwork(torch.nn.Module):
 
         self.conv_layers = torch.nn.Sequential(
             # input = bs x 1 x 96 x 96
-            nn.Conv2d(3, 8, kernel_size=5, stride=2),
+            nn.Conv2d(3, 16, kernel_size=5, stride=2),
             nn.ReLU(),
             # input = bs x 8 x 46 x 46
-            nn.Conv2d(8, 16, kernel_size=5, stride=2),
+            nn.Conv2d(16, 32, kernel_size=5, stride=2),
             nn.ReLU(),
-            # input = bs x 16 x 21 x 21
+            # input = bs x 32 x 21 x 21
         )
         self.flatten = nn.Flatten()
         self.fc_layers = torch.nn.Sequential(
-            # input = bs x (21*21*16 + 7) (from conv + sensors) = bs x 7063
-            nn.Linear(21*21*16 + 7, 128),
+            # input = bs x (21*21*32 + 7) (from conv + sensors) = bs x 7063
+            nn.Linear(21*21*32 + 7, 128),
             # nn.Linear(21*21*16, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action)),
@@ -64,7 +64,7 @@ class ClassificationNetwork(torch.nn.Module):
         # self.out_head = torch.nn.Sequential(
         #     nn.Softmax(dim=1)
         # )
-        self.init_parameters()
+        # self.init_parameters()
 
     def init_parameters(self):
         for m in self.modules():
@@ -262,23 +262,23 @@ if __name__ == "__main__":
     assert dummy_scores.shape == (batch_size, len(class_to_action)), "Forward pass output shape is incorrect.(Expected ({}, {}), got {})".format(batch_size, len(class_to_action), dummy_scores.shape)
     print("Test passed!")
     print()
-    # load one observation from ./data folder for visualization
-    # disabled by default, used for debugging only
-    print("Test3: Display sample observation preprocessing")
-    data_folder = "./data"
-    sample_image_path = os.path.join(data_folder, "observation_00001.npy")
-    sample_observation = np.load(sample_image_path)
-    dummy_observations = torch.tensor(sample_observation)
-    net.display_sample_observation(dummy_observations)
-    print("Test complete.")
-    print()
-    # load 12 observation from ./data folder for visualization
-    # disabled by default, used for debugging only
-    print("Test4: Display 10 sample observation preprocessing")
-    data_folder = "./data"
-    sample_image_path = os.path.join(data_folder, "observation_00001.npy")
-    sample_observation = np.load(sample_image_path)
-    dummy_observations = torch.tensor(sample_observation)
-    net.display_n_observation(dummy_observations)
-    print("Test complete.")
-    print()
+    # # load one observation from ./data folder for visualization
+    # # disabled by default, used for debugging only
+    # print("Test3: Display sample observation preprocessing")
+    # data_folder = "./data"
+    # sample_image_path = os.path.join(data_folder, "observation_00001.npy")
+    # sample_observation = np.load(sample_image_path)
+    # dummy_observations = torch.tensor(sample_observation)
+    # net.display_sample_observation(dummy_observations)
+    # print("Test complete.")
+    # print()
+    # # load 12 observation from ./data folder for visualization
+    # # disabled by default, used for debugging only
+    # print("Test4: Display 10 sample observation preprocessing")
+    # data_folder = "./data"
+    # sample_image_path = os.path.join(data_folder, "observation_00001.npy")
+    # sample_observation = np.load(sample_image_path)
+    # dummy_observations = torch.tensor(sample_observation)
+    # net.display_n_observation(dummy_observations)
+    # print("Test complete.")
+    # print()

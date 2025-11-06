@@ -38,8 +38,10 @@
 #c) Execute your file.
 ####
 
+start_time=$(date +%s)
 singularity exec --nv ~/sdc_gym_amd64.simg bash -x script.sh
-
+end_time=$(date +%s)
+total_elapsed=$((end_time - start_time))
 # send telegram notification with SLURM JOB_ID and total time
 job_id=${SLURM_JOB_ID:-"N/A"}
 job_name=${SLURM_JOB_NAME:-"N/A"}
