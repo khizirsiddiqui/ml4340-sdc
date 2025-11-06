@@ -20,6 +20,7 @@ def train(data_folder, trained_network_file, args):
             f"The saved model already exists at \"{trained_network_file}\". Please remove it first."
         )
     infer_action = ClassificationNetwork()
+    infer_action.train()
     optimizer = torch.optim.Adam(infer_action.parameters(), lr=args.lr)
 
     #Loss function
@@ -54,24 +55,28 @@ def train(data_folder, trained_network_file, args):
                 batch_in = torch.reshape(torch.cat(batch_in, dim=0),
                                          (-1, 96, 96, 3))
                 batch_gt = torch.reshape(torch.cat(batch_gt, dim=0), (-1, ))
-
-                # augmentation: gaussian noise
-                # add small gaussian noise to each observation in the batch
-                max_observation = torch.max(batch_in)
-                min_observation = torch.min(batch_in)
-                noise = torch.randn(batch_in.shape).to(device) * 0.01 * (max_observation - min_observation)
-                batch_in = batch_in + noise
+                optimizer.zero_grad()
 
                 batch_out = infer_action(batch_in)
-                loss = loss_function(batch_out, batch_gt)
 
-                optimizer.zero_grad()
+                loss = loss_function(batch_out, batch_gt)
                 loss.backward()
+
                 optimizer.step()
-                total_loss += loss
+                total_loss += loss.item()
 
                 batch_in = []
                 batch_gt = []
+
+                print("    Batch %5d/%5d\t loss: %.6f" % (
+                    batch_idx + 1, len(batches), loss.item()))
+                # debug: the gradients for the network are non-zero
+                for name, param in infer_action.named_parameters():
+                    if param.grad is not None:
+                        grad_norm = torch.norm(param.grad).item()
+                        if grad_norm == 0.0:
+                            print("Warning: zero gradient norm for parameter ",
+                                  name)
 
         time_per_epoch = (time.time() - start_time) / (epoch + 1)
         time_left = (1.0 * time_per_epoch) * (nr_epochs - 1 - epoch)
@@ -112,4 +117,7 @@ if __name__ == "__main__":
         count -= 1
 
     train("/tmp/dummydata", "/tmp/trained_network.pth", args)
+    assert os.path.exists("/tmp/trained_network.pth")
+
+    print("Test1 passed.")
 

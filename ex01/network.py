@@ -60,7 +60,7 @@ class ClassificationNetwork(torch.nn.Module):
             # output = bs x C
         )
         self.out_head = torch.nn.Sequential(
-            nn.Softmax(dim=1)
+            nn.Softmax(dim=0)
         )
         self.init_parameters()
 
@@ -167,21 +167,22 @@ class ClassificationNetwork(torch.nn.Module):
         for action in actions:
             steer, gas, brake = action.tolist()
             class_name = "no_action"
-            if brake > 0.0:
-                class_name = "brake"
-            else:
-                if gas > 0.0:
-                    if steer < 0.0:
-                        class_name = "steer_left_gas" 
-                    elif steer > 0.0:
-                        class_name = "steer_right_gas"
-                    else:
-                        class_name = "gas"
+            if gas > 0.0:
+                if brake > gas:
+                    class_name = "brake"
+                elif steer < 0.0:
+                    class_name = "steer_left_gas" 
+                elif steer > 0.0:
+                    class_name = "steer_right_gas"
                 else:
-                    if steer < 0.0:
-                        class_name = "steer_left"
-                    elif steer > 0.0:
-                        class_name = "steer_right"
+                    class_name = "gas"
+            else:
+                if steer < 0.0:
+                    class_name = "steer_left"
+                elif steer > 0.0:
+                    class_name = "steer_right"
+                elif brake > 0.0:
+                    class_name = "brake"
             classes.append(torch.tensor([class_index[class_name]]))
         return classes
 
