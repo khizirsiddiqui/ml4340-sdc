@@ -44,19 +44,19 @@ class ClassificationNetwork(torch.nn.Module):
         self.device = None
 
         self.conv_layers = torch.nn.Sequential(
-            # input = bs x 1 x 96 x 96
+            # input = bs x 1 x 82 x 96
             nn.Conv2d(1, 16, kernel_size=5, stride=2),
-            nn.ReLU(),
-            # input = bs x 8 x 46 x 46
+            nn.LeakyReLU(0.01),
             nn.Conv2d(16, 32, kernel_size=5, stride=2),
-            nn.ReLU(),
-            # input = bs x 32 x 21 x 21
+            nn.LeakyReLU(0.01),
+            # out = bs x 32 x 18 x 21
         )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*32 + 7) (from conv + sensors)
-            nn.Linear(21*21*32 + 7, 128),
+            nn.Dropout(p=0.3),
+            nn.Linear(18*21*32 + 7, 128),
             # nn.Linear(21*21*16, 128),
-            nn.ReLU(),
+            nn.LeakyReLU(0.01),
             nn.Linear(128, len(class_to_action)),
             # output = bs x C
         )
@@ -134,6 +134,10 @@ class ClassificationNetwork(torch.nn.Module):
         rows = np.sqrt(N).astype(int)
         cols = (num_images + rows - 1) // rows
         print("Displaying {} preprocessed images...".format(num_images))
+        if out.shape[3] == 1:
+            cmp = 'gray'
+        else:
+            cmp = None
         fig, axs = plt.subplots(rows, cols, figsize=(20, 20))
         if rows == 1 and cols == 1:
             axs = np.array([[axs]])
@@ -142,7 +146,7 @@ class ClassificationNetwork(torch.nn.Module):
         for i in range(num_images):
             r = i // cols
             c = i % cols
-            axs[r, c].imshow(out[i].cpu().numpy())
+            axs[r, c].imshow(out[i].cpu().numpy(), cmap=cmp)
             axs[r, c].axis('off')
         plt.show()
 
@@ -213,12 +217,12 @@ class ClassificationNetwork(torch.nn.Module):
 
     def crop_out_sensor_values(self, observation):
         """
-        Zeros out the region of the observation that contains the sensor values and returns the new observations.
+        Crops out the region of the observation that contains the sensor values and returns the new observations.
         observation:   torch.Tensor of size (batch_size, 96, 96, 3)
-        return         torch.Tensor of size (batch_size, 96, 96, 3)
+        return         torch.Tensor of size (batch_size, 82, 96, 3)
         """
-        observation[:, 84:94, :, :] = 0.0
-        return observation
+        observation_cropped = observation[:, :82, :, :].clone()
+        return observation_cropped
 
     def extract_sensor_values(self, observation, batch_size):
         # just approximately normalized, usually this suffices.
@@ -289,9 +293,14 @@ if __name__ == "__main__":
     # # disabled by default, used for debugging only
     # print("Test4: Display 10 sample observation preprocessing")
     # data_folder = "./data"
-    # sample_image_path = os.path.join(data_folder, "observation_00001.npy")
-    # sample_observation = np.load(sample_image_path)
-    # dummy_observations = torch.tensor(sample_observation)
+    # indices = np.random.choice([f for f in os.listdir(data_folder) if f.startswith("observation_") and f.endswith(".npy")], size=12, replace=False)
+    # sample_observations = []
+    # for idx in indices:
+    #     sample_image_path = os.path.join(data_folder, idx)
+    #     sample_observation = np.load(sample_image_path)
+    #     sample_observations.append(sample_observation)
+    # sample_observations = np.stack(sample_observations, axis=0)
+    # dummy_observations = torch.tensor(sample_observations)
     # net.display_n_observation(dummy_observations)
     # print("Test complete.")
     # print()
