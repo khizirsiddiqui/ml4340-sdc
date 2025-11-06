@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 # The flag below controls whether to allow TF32 on matmul. This flag defaults to True.
@@ -51,10 +52,9 @@ class ClassificationNetwork(torch.nn.Module):
             nn.ReLU(),
             # input = bs x 32 x 21 x 21
         )
-        self.flatten = nn.Flatten()
         self.fc_layers = torch.nn.Sequential(
-            # input = bs x (21*21*32 + 7) (from conv + sensors) = bs x 7063
-            nn.Linear(21*21*32 + 7, 128),
+            # input = bs x (21*21*32 + 7) (from conv + sensors)
+            nn.Linear(21*21*32, 128),
             # nn.Linear(21*21*16, 128),
             nn.ReLU(),
             nn.Linear(128, len(class_to_action)),
@@ -151,10 +151,8 @@ class ClassificationNetwork(torch.nn.Module):
         x = self.preprocessing(observation)
         x = x.permute(0, 3, 1, 2)  # to bs x C x H x W
         conv_out = self.conv_layers(x)
-
-        sensor_values = self.extract_sensor_values(observation, batch_size).to(self.get_device()) 
-        fc_input = torch.cat([self.flatten(conv_out), sensor_values], dim=1)
-        fc_out = self.fc_layers(fc_input)
+        flat_conv = conv_out.reshape(batch_size, -1)
+        fc_out = self.fc_layers(flat_conv)
 
         return fc_out 
 
