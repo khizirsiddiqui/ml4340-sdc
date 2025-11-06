@@ -64,7 +64,7 @@ class ClassificationNetwork(torch.nn.Module):
         # self.out_head = torch.nn.Sequential(
         #     nn.Softmax(dim=1)
         # )
-        # self.init_parameters()
+        self.init_parameters()
 
     def init_parameters(self):
         for m in self.modules():

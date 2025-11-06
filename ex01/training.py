@@ -55,6 +55,11 @@ def train(data_folder, trained_network_file, args):
                 batch_in = torch.reshape(torch.cat(batch_in, dim=0),
                                          (-1, 96, 96, 3))
                 batch_gt = torch.reshape(torch.cat(batch_gt, dim=0), (-1, ))
+
+                # add gausian noise to the input images for data augmentation
+                noise = torch.randn_like(batch_in) * 0.01
+                batch_in = batch_in + noise
+
                 optimizer.zero_grad()
 
                 batch_out = infer_action(batch_in)
@@ -78,7 +83,7 @@ def train(data_folder, trained_network_file, args):
                             grad_norm_zero = True
                             print("Warning: zero gradient norm for parameter ",
                                   name)
-                if grad_norm_zero:
+                if grad_norm_zero or random.random() < 0.2:
                     # debug: print sample batch_gt and the corresponding batch_out
                     print("        Sample batch_gt: ", batch_gt[:5])
                     print("        Sample batch_out: ", torch.argmax(batch_out[:5].detach(), dim=1).cpu().numpy())
