@@ -28,10 +28,6 @@ def load_demonstrations(data_folder):
                 idx = fd.split('_')[1].split('.')[0]
                 data = np.load(os.path.join(data_folder, f'action_{idx}.npy'))
                 actions.append(data)
-    observations = np.concatenate(observations, axis=0)
-    actions = np.concatenate(actions, axis=0)
-    observations = [x for x in observations]
-    actions = [x for x in actions]
     assert len(observations) == len(actions), "Number of observations and actions do not match."
     return observations, actions
 
@@ -52,11 +48,14 @@ def save_demonstrations(data_folder, actions, observations):
     index = 0
     for f in os.listdir(data_folder):
         if f.endswith('.npy') and f.startswith('observation_'):
-            index += 1
-    save_path = os.path.join(data_folder, f'observation_{index:05d}.npy')
-    np.save(save_path, observations)
-    save_path = os.path.join(data_folder, f'action_{index:05d}.npy')
-    np.save(save_path, actions)
+            idx = f.split('_')[1].split('.')[0]
+            index = max(index, int(idx) + 1)
+    for observation, action in zip(observations, actions):
+        save_path = os.path.join(data_folder, f'observation_{index:05d}.npy')
+        np.save(save_path, observation)
+        save_path = os.path.join(data_folder, f'action_{index:05d}.npy')
+        np.save(save_path, action)
+        index += 1
 
 
 class ControlStatus:
