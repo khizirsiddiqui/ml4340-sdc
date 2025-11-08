@@ -45,7 +45,7 @@ def evaluate(args, trained_network_file):
             action_scores = infer_action(torch.Tensor(
                 np.ascontiguousarray(observation[None])).to(device))
 
-            steer, gas, brake = infer_action.scores_to_action(action_scores)
+            steer, gas, brake = action_scores[0], action_scores[1], action_scores[2]
 
             observation, reward, done, trunc, info = env.step([steer, gas, brake])
             frames.append(observation)

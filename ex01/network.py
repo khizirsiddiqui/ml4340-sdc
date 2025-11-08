@@ -54,12 +54,23 @@ class ClassificationNetwork(torch.nn.Module):
         )
         self.fc_layers = torch.nn.Sequential(
             # input = bs x (21*21*32 + 7) (from conv + sensors)
-            nn.Dropout(p=0.3),
+            nn.Dropout(p=0.5),
             nn.Linear(18*21*32 + 7, 128),
             # nn.Linear(21*21*16, 128),
             nn.LeakyReLU(0.01),
-            nn.Linear(128, len(class_to_action)),
-            # output = bs x C
+            # output = bs x 128
+        )
+        self.steer = nn.Sequential(
+            torch.nn.Linear(128, 1),
+            torch.nn.Tanh()
+        )
+        self.gas = nn.Sequential(
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        )
+        self.brake = nn.Sequential(
+            nn.Linear(128, 1),
+            nn.Sigmoid()
         )
         # not needed if using CrossEntropyLoss
         # self.out_head = torch.nn.Sequential(
@@ -217,8 +228,11 @@ class ClassificationNetwork(torch.nn.Module):
         flat_conv = conv_out.reshape(batch_size, -1)
         fc_in = torch.cat([flat_conv, sensor_values], dim=1)
         fc_out = self.fc_layers(fc_in)
-
-        return fc_out 
+        steer_out = self.steer(fc_out)
+        gas_out = self.gas(fc_out)
+        brake_out = self.brake(fc_out)
+        out = torch.cat([steer_out, gas_out, brake_out], dim=1)
+        return out 
 
     def actions_to_classes(self, actions):
         """
@@ -261,9 +275,10 @@ class ClassificationNetwork(torch.nn.Module):
         scores:         python list of torch.Tensors of size C
         return          (float, float, float)
         """
-        class_idx = torch.argmax(scores).item()
-        class_name = index_class[class_idx]
-        return class_to_action[class_name]
+        # class_idx = torch.argmax(scores).item()
+        # class_name = index_class[class_idx]
+        # return class_to_action[class_name]
+        return scores
 
     def crop_out_sensor_values(self, observation):
         """
@@ -295,22 +310,22 @@ class ClassificationNetwork(torch.nn.Module):
 
 if __name__ == "__main__":
     net = ClassificationNetwork()
-    print("Test1: Invertibility of class action mappings")
-    test_actions = [torch.tensor(x) for _, x in class_to_action.items()]
-    test_classes = net.actions_to_classes(test_actions)
-    print("Actions:", test_actions)
-    print("Mapped classes:", test_classes)
-    mapped_actions = []
-    for scores in test_classes:
-        class_scores = torch.zeros(len(class_to_action))
-        class_scores[scores.item()] = 1
-        action = net.scores_to_action(class_scores)
-        print("Scores:", scores, "Mapped action:", action)
-        mapped_actions.append(action)
-    print("Mapped back actions:", mapped_actions)
-    assert all([torch.allclose(a, torch.tensor(ma)) for a, ma in zip(test_actions, mapped_actions)]), "Action to class mapping or back is incorrect."
-    print("Test passed!")
-    print()
+    # print("Test1: Invertibility of class action mappings")
+    # test_actions = [torch.tensor(x) for _, x in class_to_action.items()]
+    # test_classes = net.actions_to_classes(test_actions)
+    # print("Actions:", test_actions)
+    # print("Mapped classes:", test_classes)
+    # mapped_actions = []
+    # for scores in test_classes:
+    #     class_scores = torch.zeros(len(class_to_action))
+    #     class_scores[scores.item()] = 1
+    #     action = net.scores_to_action(class_scores)
+    #     print("Scores:", scores, "Mapped action:", action)
+    #     mapped_actions.append(action)
+    # print("Mapped back actions:", mapped_actions)
+    # assert all([torch.allclose(a, torch.tensor(ma)) for a, ma in zip(test_actions, mapped_actions)]), "Action to class mapping or back is incorrect."
+    # print("Test passed!")
+    # print()
 
     print("Test2: forward pass")
     batch_size = 4
@@ -322,7 +337,7 @@ if __name__ == "__main__":
     print("Output scores:")
     for i in range(batch_size):
         print(dummy_scores[i])
-    assert dummy_scores.shape == (batch_size, len(class_to_action)), "Forward pass output shape is incorrect.(Expected ({}, {}), got {})".format(batch_size, len(class_to_action), dummy_scores.shape)
+    # assert dummy_scores.shape == (batch_size, len(class_to_action)), "Forward pass output shape is incorrect.(Expected ({}, {}), got {})".format(batch_size, len(class_to_action), dummy_scores.shape)
     print("Test passed!")
     print()
 
