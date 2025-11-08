@@ -39,6 +39,7 @@ def evaluate(args, trained_network_file):
             print("Please note that you can't use the window on the cluster.")
             return
 
+        frames = [observation]
         reward_per_episode = 0
         for t in range(600):
             action_scores = infer_action(torch.Tensor(
@@ -47,8 +48,19 @@ def evaluate(args, trained_network_file):
             steer, gas, brake = infer_action.scores_to_action(action_scores)
 
             observation, reward, done, trunc, info = env.step([steer, gas, brake])
+            frames.append(observation)
             reward_per_episode += reward
-
+        try:
+            from gymnasium.utils.save_video import save_video
+            import moviepy
+            save_video(
+                frames,
+                video_folder='videos',
+                fps=env.metadata['render_fps'],
+                name_prefix='car_racing_episode_%d' % episode,
+            )
+        except ImportError:
+            pass
         print('episode %d \t reward %f' % (episode, reward_per_episode))
 
     env.close()

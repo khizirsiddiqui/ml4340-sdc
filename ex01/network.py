@@ -25,10 +25,10 @@ class_to_action = {
     "no_action": [0.0, 0.0, 0.0],
     "steer_left": [-1.0, 0.0, 0.0],
     "steer_right": [1.0, 0.0, 0.0],
-    "gas": [0.0, 0.5, 0.0],
-    "brake": [0.0, 0.0, 1.0],
-    "steer_left_gas": [-1.0, 0.5, 0.0],
-    "steer_right_gas": [1.0, 0.5, 0.0],
+    "gas": [0.0, 0.3, 0.0],
+    "brake": [0.0, 0.0, 0.9],
+    "steer_left_gas": [-1.0, 0.0, 0.0],
+    "steer_right_gas": [1.0, 0.0, 0.0],
 }
 class_index = {k: i for i, k in enumerate(class_to_action.keys())}
 index_class = {i: k for i, k in enumerate(class_to_action.keys())}
