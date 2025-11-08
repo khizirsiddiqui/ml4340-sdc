@@ -46,6 +46,7 @@ total_elapsed=$((end_time - start_time))
 job_id=${SLURM_JOB_ID:-"N/A"}
 job_name=${SLURM_JOB_NAME:-"N/A"}
 MESSAGE="Job ID: $job_id, Job Name: $job_name, Total Time: $total_elapsed seconds."
+MESSAGE=$MESSAGE$(tail -n 10 job.${SLURM_JOB_ID}.out)
 cd ~/util-scripts
 bash send_tg.sh "$MESSAGE"
 echo

@@ -1,7 +1,7 @@
 start_time=$(date +%s)
 
-NUM_EPOCHS=250
-MODEL_PATH=train15.pth
+NUM_EPOCHS=2000
+MODEL_PATH=train17.pth
 echo ">> Training model and saving to $MODEL_PATH"
 python main.py --train --nr_epochs $NUM_EPOCHS --agent_save_path $MODEL_PATH
 t0=$(date +%s)

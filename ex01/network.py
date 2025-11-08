@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from collections import Counter 
 
 # The flag below controls whether to allow TF32 on matmul. This flag defaults to True.
 torch.backends.cuda.matmul.allow_tf32 = False
@@ -84,16 +85,61 @@ class ClassificationNetwork(torch.nn.Module):
         x:   torch.Tensor of size (batch_size, H, W, 3)
         return torch.Tensor of size (batch_size, 1, H, W)
         """
-        r, g, b = x[:, :, :, 0], x[:, :, :, 1], x[:, :, :, 2]
-        gray = 0.21 * r + 0.72 * g + 0.07 * b
-        gray = gray.unsqueeze(-1)  # to bs x H x W x 1
-        return gray
+        # r, g, b = x[:, :, :, 0], x[:, :, :, 1], x[:, :, :, 2]
+        # gray = 0.21 * r + 0.72 * g + 0.07 * b
+        # gray = gray.unsqueeze(-1)  # to bs x H x W x 1
+        # return gray
+
+        R, G, B = x[:, :, :, 0], x[:, :, :, 1], x[:, :, :, 2]
+        # Start with all zeros
+        result = torch.zeros_like(R)
+
+        # Red car mask
+        red_mask = (R > 180) & (G < 120) & (B < 120)
+        result[red_mask] = 220
+
+        # Road mask (gray, but not-red, not-green)
+        road_mask = (R > 80) & (R < 140) & (G > 80) & (G < 140) & (B > 80) & (B < 140)
+        result[road_mask] = 160
+
+        # Grass mask (green dominance)
+        grass_mask = (G > 150) & (R < 120) & (B < 120)
+        result[grass_mask] = 50
+
+        # Curb mask (very bright: red-white)
+        curb_mask = ((R > 200) & (G > 200)) | ((R > 200) & (B > 200))
+        result[curb_mask] = 255
+
+        # Everything else: assign mid gray
+        result[(result == 0)] = 100
+        result = result.unsqueeze(-1)  # to bs x H x W x 1
+        return result
 
     def preprocessing(self, observation):
         x = observation
         x = self.grayscale(x)                  # to bs x H x W x 1
         x = self.crop_out_sensor_values(x)     # zeros out the sensor values
         return x
+
+    def get_color_counts(self, observation):
+        # results of a random sample:
+        # grass:
+        # 100, 202, 100
+        # 100, 228, 100
+        # 0, 253, 0
+
+        # if the input is not batched add a batch dimension
+        if len(observation.shape) == 3:
+            observation = observation.unsqueeze(0)
+        bs = observation.shape[0]
+        color_counts = []
+        for i in range(bs):
+            obs = observation[i]
+            obs_np = obs.cpu().numpy().astype(np.uint8)
+            pixels = [tuple(pixel) for row in obs_np for pixel in row]
+            color_count = Counter(pixels)
+            color_counts.append(color_count)
+        return color_counts
 
     def display_sample_observation(self, observation):
         # if the input is not batched add a batch dimension
@@ -116,11 +162,15 @@ class ClassificationNetwork(torch.nn.Module):
         axs[1].imshow(preprocessed[0].cpu().numpy().astype(np.uint8), cmap=cmp)
         axs[1].set_title("Preprocessed observation")
         axs[1].axis('off')
+        plt.show()
         speed, abs_sensors, steering, gyroscope = sensor_values[0, 0], sensor_values[0, 1:5], sensor_values[0, 5], sensor_values[0, 6]
         print("Extracted sensor values (raw): speed: {:.3f}, abs_sensors: {}, steering: {:.3f}, gyroscope: {:.3f}".format(
             speed.item(), abs_sensors.cpu().numpy(), steering.item(), gyroscope.item()
         ))
-        plt.show()
+        print("Color counts in the original observation:")
+        color_counts = self.get_color_counts(sample)
+        for color, count in color_counts[0].most_common(10):
+            print("Color {}: {} pixels".format(color, count))
 
     def display_n_observation(self, observation, N=12):
         import matplotlib.pyplot as plt
@@ -281,13 +331,22 @@ if __name__ == "__main__":
     # print("Test3: Display sample observation preprocessing")
     # data_folder = "./data"
     # # pick a sample observation_xxxxxx.npy file from data_folder
-    # index = np.random.choice([f for f in os.listdir(data_folder) if f.startswith("observation_") and f.endswith(".npy")])
-    # sample_image_path = os.path.join(data_folder, index)
+    # attempts = 0
+    # sample_image_path = ""
+    # while sample_image_path != "" and attempts < 10000:
+    #     index = np.random.randint(0, 100000)
+    #     sample_image_path = os.path.join(data_folder, "observation_{}.npy".format(index))
+    #     if not os.path.exists(sample_image_path):
+    #         sample_image_path = ""
+    #     attempts += 1
+    # if sample_image_path == "":
+    #     print("Could not find observation_xxxx.npy after 10 attempts, picking a random one.")
+    #     index = "observation_05145.npy"
+    #     sample_image_path = os.path.join(data_folder, index)
     # sample_observation = np.load(sample_image_path)
     # dummy_observations = torch.tensor(sample_observation)
     # net.display_sample_observation(dummy_observations)
     # print("Test complete.")
-    # print()
 
     # # load 12 observation from ./data folder for visualization
     # # disabled by default, used for debugging only

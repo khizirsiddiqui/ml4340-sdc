@@ -24,9 +24,13 @@ def load_demonstrations(data_folder):
         if fd.endswith('.npy'):
             if fd.startswith('observation_'):
                 data = np.load(os.path.join(data_folder, fd))
+                assert data.shape == (96, 96, 3), f"Observation file {fd} has incorrect shape {data.shape}, expected (96, 96, 3)."
                 observations.append(data)
                 idx = fd.split('_')[1].split('.')[0]
+                if not os.path.exists(os.path.join(data_folder, f'action_{idx}.npy')):
+                    raise FileNotFoundError(f"Action file action_{idx}.npy not found for observation_{idx}.npy")
                 data = np.load(os.path.join(data_folder, f'action_{idx}.npy'))
+                assert data.shape == (3,), f"Action file action_{idx}.npy has incorrect shape {data.shape}, expected (3,)."
                 actions.append(data)
     assert len(observations) == len(actions), "Number of observations and actions do not match."
     return observations, actions
