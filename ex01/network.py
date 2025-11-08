@@ -23,8 +23,8 @@ torch.backends.cudnn.allow_tf32 = False
 
 class_to_action = {
     "no_action": [0.0, 0.0, 0.0],
-    "steer_left": [-1.0, 0.0, 0.0],
-    "steer_right": [1.0, 0.0, 0.0],
+    "steer_left": [-1.0, 0.0, 0.1],
+    "steer_right": [1.0, 0.0, 0.1],
     "gas": [0.0, 0.3, 0.0],
     "brake": [0.0, 0.0, 0.9],
     "steer_left_gas": [-1.0, 0.0, 0.0],
