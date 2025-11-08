@@ -46,7 +46,7 @@ class ClassificationNetwork(torch.nn.Module):
 
         self.conv_layers = torch.nn.Sequential(
             # input = bs x 1 x 82 x 96
-            nn.Conv2d(1, 16, kernel_size=5, stride=2),
+            nn.Conv2d(3, 16, kernel_size=5, stride=2),
             nn.LeakyReLU(0.01),
             nn.Conv2d(16, 32, kernel_size=5, stride=2),
             nn.LeakyReLU(0.01),
@@ -117,7 +117,7 @@ class ClassificationNetwork(torch.nn.Module):
 
     def preprocessing(self, observation):
         x = observation
-        x = self.grayscale(x)                  # to bs x H x W x 1
+        # x = self.grayscale(x)                  # to bs x H x W x 1
         x = self.crop_out_sensor_values(x)     # zeros out the sensor values
         return x
 
