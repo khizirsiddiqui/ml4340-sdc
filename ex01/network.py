@@ -23,9 +23,9 @@ torch.backends.cudnn.allow_tf32 = False
 
 class_to_action = {
     "no_action": [0.0, 0.0, 0.0],
-    "steer_left": [-1.0, 0.0, 0.1],
-    "steer_right": [1.0, 0.0, 0.1],
-    "gas": [0.0, 0.5, 0.0],
+    "steer_left": [-1.0, 0.0, 0.0],
+    "steer_right": [1.0, 0.0, 0.0],
+    "gas": [0.0, 0.3, 0.0],
     "brake": [0.0, 0.0, 0.9],
     "steer_left_gas": [-1.0, 0.0, 0.0],
     "steer_right_gas": [1.0, 0.0, 0.0],
@@ -53,7 +53,7 @@ class ClassificationNetwork(torch.nn.Module):
             # out = bs x 32 x 18 x 21
         )
         self.fc_layers = torch.nn.Sequential(
-            # input = bs x (21*21*32 + 7) (from conv + sensors)
+            # input = bs x (18*21*32 + 7) (from conv + sensors)
             nn.Dropout(p=0.3),
             nn.Linear(18*21*32 + 7, 128),
             # nn.Linear(21*21*16, 128),

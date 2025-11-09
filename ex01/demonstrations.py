@@ -60,6 +60,7 @@ def save_demonstrations(data_folder, actions, observations):
         save_path = os.path.join(data_folder, f'action_{index:05d}.npy')
         np.save(save_path, action)
         index += 1
+    print("Saved ", len(observations), " demonstrations to ", data_folder)
 
 
 class ControlStatus:
