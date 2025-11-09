@@ -33,6 +33,24 @@ class_to_action = {
 class_index = {k: i for i, k in enumerate(class_to_action.keys())}
 index_class = {i: k for i, k in enumerate(class_to_action.keys())}
 
+class EdgeDetectionLayer(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        sobel_x = 2 * torch.tensor([[-1., 0., 1.],
+                                 [-2., 0., 2.],
+                                 [-1., 0., 1.]])
+        sobel_y = 2 * torch.tensor([[-1., -2., -1.],
+                                 [0., 0., 0.],
+                                 [1., 2., 1.]])
+        self.weight_x = nn.Parameter(sobel_x.unsqueeze(0).unsqueeze(0), requires_grad=False)
+        self.weight_y = nn.Parameter(sobel_y.unsqueeze(0).unsqueeze(0), requires_grad=False)
+
+    def forward(self, x):
+        edges_x = F.conv2d(x, self.weight_x, padding=1)
+        edges_y = F.conv2d(x, self.weight_y, padding=1)
+        edges = torch.sqrt(edges_x ** 2 + edges_y ** 2)
+        return edges
+
 class ClassificationNetwork(torch.nn.Module):
     def __init__(self):
         """
@@ -44,9 +62,10 @@ class ClassificationNetwork(torch.nn.Module):
 
         self.device = None
 
+        self.edge_layer = EdgeDetectionLayer()
         self.conv_layers = torch.nn.Sequential(
             # input = bs x 1 x 82 x 96
-            nn.Conv2d(3, 16, kernel_size=5, stride=2),
+            nn.Conv2d(4, 16, kernel_size=5, stride=2),
             nn.LeakyReLU(0.01),
             nn.Conv2d(16, 32, kernel_size=5, stride=2),
             nn.LeakyReLU(0.01),
@@ -211,9 +230,17 @@ class ClassificationNetwork(torch.nn.Module):
         """
         batch_size = observation.shape[0]
         sensor_values = self.extract_sensor_values(observation, batch_size)
+
         x = self.preprocessing(observation)
+        grayscale = self.grayscale(x)
+
         x = x.permute(0, 3, 1, 2)  # to bs x C x H x W
-        conv_out = self.conv_layers(x)
+        grayscale = grayscale.permute(0, 3, 1, 2)
+
+        edges = self.edge_layer(grayscale)  # to bs x 1 x H x W
+        tensor_in = torch.cat([x, edges], dim=1)
+
+        conv_out = self.conv_layers(tensor_in)
         flat_conv = conv_out.reshape(batch_size, -1)
         fc_in = torch.cat([flat_conv, sensor_values], dim=1)
         fc_out = self.fc_layers(fc_in)
@@ -316,7 +343,7 @@ if __name__ == "__main__":
     batch_size = 4
     num_channels = 3
     dummy_observations = torch.randn(batch_size, 96, 96, num_channels)
-    dummy_scores = net.forward(dummy_observations)
+    dummy_scores = net(dummy_observations)
     print("Input observations shape:", dummy_observations.shape)
     print("Output scores shape:", dummy_scores.shape)
     print("Output scores:")
