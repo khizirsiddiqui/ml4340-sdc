@@ -23,13 +23,15 @@ def train(data_folder, trained_network_file, args):
     infer_action.train()
     optimizer = torch.optim.Adam(infer_action.parameters(), lr=args.lr)
 
-    #Loss function as Mean Squared Error Loss
-    loss_function = nn.MSELoss()
+    #Loss function
+    loss_function = nn.CrossEntropyLoss()
 
     observations, actions = load_demonstrations(data_folder)
     observations = [torch.Tensor(observation) for observation in observations]
-    actions = [torch.Tensor(action).unsqueeze(0) for action in actions]
-    batches = list(zip(observations, actions))
+    actions = [torch.Tensor(action) for action in actions]
+
+    batches = [batch for batch in zip(observations,
+                                      infer_action.actions_to_classes(actions))]
 
     # setting device on GPU if available, else CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -52,7 +54,8 @@ def train(data_folder, trained_network_file, args):
             if (batch_idx + 1) % batch_size == 0 or batch_idx == len(batches) - 1:
                 batch_in = torch.reshape(torch.cat(batch_in, dim=0),
                                          (-1, 96, 96, 3))
-                batch_gt = torch.cat(batch_gt, dim=0)
+                batch_gt = torch.reshape(torch.cat(batch_gt, dim=0), (-1, ))
+
                 # add gausian noise to the input images for data augmentation
                 noise = torch.randn_like(batch_in) * 0.01
                 batch_in = batch_in + noise
@@ -60,6 +63,7 @@ def train(data_folder, trained_network_file, args):
                 optimizer.zero_grad()
 
                 batch_out = infer_action(batch_in)
+
                 loss = loss_function(batch_out, batch_gt)
                 loss.backward()
 
@@ -81,11 +85,8 @@ def train(data_folder, trained_network_file, args):
                                   name)
                 if grad_norm_zero or random.random() < 0.2:
                     # debug: print sample batch_gt and the corresponding batch_out
-                    for idx in range(min(5, batch_gt.shape[0])):
-                        print("        Sample %d - GT: %s \tOUT: %s" % (
-                            idx, batch_gt[idx, :].cpu().numpy(),
-                            batch_out[idx, :].detach().cpu().numpy()))
-
+                    print("        Sample batch_gt: ", batch_gt[:5])
+                    print("        Sample batch_out: ", torch.argmax(batch_out[:5].detach(), dim=1).cpu().numpy())
                 else:
                     print("        Sum grad-norm: ", grad_sum)
 
