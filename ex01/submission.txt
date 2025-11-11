@@ -2,4 +2,8 @@ Team name: Drowsy Drivers
 Name 1: Mohd Khizir S.
 Name 2: Raffaele R.
 
-Score after running 'python main.py --score':
+Code used to generate submission:
+$ singularity exec ~/sdc_gym_arm64.simg python main.py --score --agent_load_path submission.pth --no_display
+
+Score after running 'python main.py --score': 671.618794
+
