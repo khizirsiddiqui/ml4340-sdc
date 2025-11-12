@@ -6,7 +6,7 @@ from learning import perform_qlearning_step, update_target_net
 from model import DQN
 from replay_buffer import ReplayBuffer
 from schedule import LinearSchedule
-from utils import get_state, visualize_training
+from utils import get_state, visualize_training, save_training_data
 import os
 import matplotlib
 import time
@@ -83,6 +83,7 @@ def learn(env,
 
     # Build networks
     policy_net = DQN(action_size, device).to(device)
+    model_save_path = os.path.join(outdir, model_identifier + '.pth')
     target_net = DQN(action_size, device).to(device)
     target_net.load_state_dict(policy_net.state_dict())
     target_net.eval()
@@ -145,14 +146,15 @@ def learn(env,
             print(f"\n** {t} th timestep - {end - start:.5f} sec passed**\n")
 
             # Save the trained policy network
-            torch.save(policy_net.state_dict(), os.path.join(outdir, model_identifier + '.pth'))
+            policy_net.save(model_save_path)
 
     end = time.time()
     print(f"\n** Total {end - start:.5f} sec passed**\n")
 
     # Save the trained policy network
-    torch.save(policy_net.state_dict(), os.path.join ( outdir, model_identifier+'.pth' ))
+    policy_net.save(model_save_path)
 
-    # Visualize the training loss and cumulative reward curves
-    visualize_training(episode_rewards, training_losses, model_identifier, outdir )
- 
+    # Visualize and Save the training loss and cumulative reward curves
+    visualize_training(episode_rewards, training_losses, outdir)
+    save_training_data(episode_rewards, training_losses, outdir)
+
