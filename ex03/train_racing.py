@@ -1,3 +1,4 @@
+import os
 import gymnasium as gym
 import deepq
 import argparse
@@ -22,6 +23,27 @@ def load_actions ( action_filename ):
 
     return actions
 
+def get_experiment_name():
+    '''
+     reads the git-commit-hash.txt file with contents as
+            git-commit-hash: <hash>
+            git-commit-log: Ex03/ABC - <log>
+     return the ABC part of git-commit-log
+    '''
+    experiment_name = "unknown"
+    try:
+        with open("git-commit-hash.txt", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if line.startswith("git-commit-log:"):
+                    experiment_name = line.split(":", 1)[1].strip().split(" - ")[0]
+                    experiment_name = experiment_name.split("/")[-1]
+                    break
+    except FileNotFoundError:
+        print("git-commit-hash.txt file not found.")
+    return experiment_name
+
+
 def main ():
 
     """ 
@@ -44,6 +66,22 @@ def main ():
     parser.add_argument ( '--outdir', type=str, default='', help='a directory for output' )
 
     args = parser.parse_args()
+
+    if args.outdir == '':
+        experiment_name = get_experiment_name()
+        args.outdir = f"results/{experiment_name}"
+        if not os.path.exists(args.outdir):
+            os.makedirs(args.outdir)
+    agent_path = os.path.join(args.outdir, args.agent_name + '.pth')
+    if os.path.exists(agent_path):
+        raise FileExistsError(f"Error: agent file {agent_path} already exists and will be overwritten."
+                                " Please use a different agent_name or outdir.")
+    print(f"Creating symbolic link to agent file: {agent_path} -> ./latest.pth")
+    try:
+        os.unlink('latest.pth')
+    except FileNotFoundError:
+        pass
+    os.symlink(agent_path, 'latest.pth')
 
     # check args
     print ( "\nArgs information")

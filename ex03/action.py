@@ -17,7 +17,9 @@ def select_greedy_action(state, policy_net, action_size):
         ID of selected action
     """
 
-    # TODO: Select greedy action
+    q_values = policy_net(torch.tensor(state, dtype=torch.float32))
+    greedy_action = torch.argmax(q_values, dim=1).item()
+    return greedy_action
 
 def select_exploratory_action(state, policy_net, action_size, exploration, t):
     """ Select an action according to an epsilon-greedy exploration strategy
@@ -38,8 +40,12 @@ def select_exploratory_action(state, policy_net, action_size, exploration, t):
     int
         ID of selected action
     """
-
-    # TODO: Select exploratory action
+    epsilon = exploration.value(t)
+    if random.random() < epsilon:
+        exploratory_action = random.randint(0, action_size - 1)
+    else:
+        exploratory_action = select_greedy_action(state, policy_net, action_size)
+    return exploratory_action
 
 
 def get_action ( state, policy_net, action_size, actions = None, exploration = None, t = None, is_greedy = False):
