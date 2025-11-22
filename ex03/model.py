@@ -2,6 +2,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class EdgeDetectionLayer(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        sobel_x = 2 * torch.tensor([[-1., 0., 1.],
+                                 [-2., 0., 2.],
+                                 [-1., 0., 1.]])
+        sobel_y = 2 * torch.tensor([[-1., -2., -1.],
+                                 [0., 0., 0.],
+                                 [1., 2., 1.]])
+        self.weight_x = nn.Parameter(sobel_x.unsqueeze(0).unsqueeze(0), requires_grad=False)
+        self.weight_y = nn.Parameter(sobel_y.unsqueeze(0).unsqueeze(0), requires_grad=False)
+
+    def grayscale(self, x):
+        # input x has shape (batch_size, channels, height, width)
+        # output has shape (batch_size, 1, height, width)
+        r, g, b = x[:, 0:1, :, :], x[:, 1:2, :, :], x[:, 2:3, :, :]
+        gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        return gray
+
+    def forward(self, x):
+        if x.shape[1] == 3:
+            x = self.grayscale(x)
+        edges_x = F.conv2d(x, self.weight_x, padding=1)
+        edges_y = F.conv2d(x, self.weight_y, padding=1)
+        edges = torch.sqrt(edges_x ** 2 + edges_y ** 2)
+        return edges
+
 class DQN(nn.Module):
     def __init__(self, action_size, device):
         """ Create Q-network
@@ -17,9 +44,10 @@ class DQN(nn.Module):
         self.device = device 
         self.action_size = action_size
 
+        self.edge_detection = EdgeDetectionLayer()
         self.conv_layers = nn.Sequential(
             # input image size: (3, 96, 96)
-            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=8, stride=2),
+            nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=2),
             # output size after this layer: (16, 45, 45)
             nn.ReLU(),
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=8, stride=2),
@@ -31,6 +59,10 @@ class DQN(nn.Module):
             nn.ReLU(),
         )
         self.output_layer = nn.Linear(in_features=256, out_features=action_size)
+
+    def preprocess_observation(self, observation):
+        if observation.max() > 1.0:
+            observation = observation / 255.0
 
     def forward(self, observation):
         """ Forward pass to compute Q-values
@@ -46,8 +78,11 @@ class DQN(nn.Module):
         if observation.device != self.device:
             observation = observation.to(self.device)
         batch_size = observation.shape[0]
+        self.preprocess_observation(observation)
         observation = observation.permute(0, 3, 1, 2)
-        x = self.conv_layers(observation)
+        edges = self.edge_detection(observation)
+        x = torch.cat((observation, edges), dim=1)
+        x = self.conv_layers(x)
         x = x.reshape(batch_size, -1)
         x = self.fc_layers(x)
         q_values = self.output_layer(x)
