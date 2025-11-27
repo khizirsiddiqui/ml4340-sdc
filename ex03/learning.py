@@ -35,7 +35,7 @@ def perform_qlearning_step(policy_net, target_net, optimizer, replay_buffer, bat
     # 2. Compute Q(s_t, a)
     q_values = policy_net(states).gather(1, actions)
     # 3. Compute \max_a Q(s_{t+1}, a) for all next states.
-    next_q_values = target_net(next_states).max(1)[0].unsqueeze(1)
+    next_q_values = target_net(next_states).max(1)[0].unsqueeze(1).detach()
     # 4. Mask next state values where episodes have terminated
     next_q_values = next_q_values * (1 - dones)
     # 5. Compute the target
@@ -61,5 +61,6 @@ def update_target_net(policy_net, target_net):
         target Q-network
     """
     target_net.load_state_dict(policy_net.state_dict())
+    policy_net.deep_copy_frame_stack(target_net)
     target_net.eval()
 

@@ -26,7 +26,9 @@ def learn(env,
           new_actions = None,
           model_identifier='agent',
           outdir = "",
-          use_doubleqlearning = False):
+          use_doubleqlearning = False,
+          skip_first_n_frames = 50,
+          frame_stack_size = 5):
     """ Train a deep q-learning model.
     Parameters
     -------
@@ -56,6 +58,14 @@ def learn(env,
         update the target network every `target_network_update_freq` steps.
     model_identifier: string
         identifier of the agent
+    outdir: string
+        output directory to save the results
+    use_doubleqlearning: bool
+        whether to use double q-learning
+    skip_first_n_frames: int
+        number of frames to skip at the beginning of training in each episode
+    frame_stack_size: int
+        number of frames to stack as input to the model and also used by the replay buffer for storing states
     """
 
     # set float as default
@@ -89,7 +99,7 @@ def learn(env,
     target_net.eval()
 
     # Create replay buffer
-    replay_buffer = ReplayBuffer(buffer_size)
+    replay_buffer = ReplayBuffer(buffer_size, frame_stack_size, env.observation_space.shape)
 
     # Create optimizer
     optimizer = optim.Adam(policy_net.parameters(), lr=lr)
@@ -100,26 +110,29 @@ def learn(env,
                                  final_p=exploration_final_eps)
 
     # Initialize environment and get first state
+    ep_time = 0
     obs, _ = env.reset()
     obs = get_state(obs)
     start = time.time()
-    
+   
     # Iterate over the total number of time steps
     for t in range(total_timesteps):
+
+        ep_time += 1
+        if ep_time <= skip_first_n_frames + 1:
+            # Skip the first n+1 frames in each episode
+            env_action = [0.0, 0.0, 0.0]
+            new_obs, rew, term, trunc, _ = env.step(env_action)
+            done = term or trunc
+            continue
 
         # Select action
         env_action, action_id = get_action ( obs, policy_net, action_size, actions, exploration, t, is_greedy=False )
 
-        # TODO: if you want to implement the network associated with the continuous action set or the prioritized replay buffer, you need to reimplement the replay buffer.
+        # Take action in the environment
+        new_obs, rew, term, trunc, _ = env.step(env_action)
+        done = term or trunc
 
-        # Perform action fram_skip-times
-        for f in range(action_repeat):
-            new_obs, rew, term, trunc, _ = env.step(env_action)
-            done = term or trunc
-            episode_rewards[-1] += rew
-            if done:
-                break
-            
         # Store transition in the replay buffer.
         new_obs = get_state(new_obs)
         replay_buffer.add(obs, action_id, rew, new_obs, float(done))
@@ -128,6 +141,7 @@ def learn(env,
         if done:
             # Start new episode after previous episode has terminated
             print("timestep: " + str(t) + " \t reward: " + str(episode_rewards[-1]))
+            ep_time = 0
             obs, _ = env.reset()
             obs = get_state(obs)
             episode_rewards.append(0.0)

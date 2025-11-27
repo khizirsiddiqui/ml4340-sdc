@@ -14,13 +14,13 @@
 #SBATCH --partition=day
 # the slurm partition the job is queued to.
 
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=8G
 # the job will need 16GB of memory equally distributed on 4 cpus.  (251GB are available in total on one node)
 
 #SBATCH --gres=gpu:1
 #the job can use and see 1 GPUs (4 GPUs are available in total on one node)
 
-#SBATCH --time=15:00:00
+#SBATCH --time=1-0
 # the maximum time the scripts needs to run
 # "minutes:seconds", "hours:minutes:seconds", "days-hours", "days-hours:minutes" and "days-hours:minutes:seconds"
 
@@ -45,7 +45,7 @@ job_desc=$(grep -m 1 'outdir:' job.${SLURM_JOB_ID}.out | awk '{print $2}')
 job_desc="${job_desc/results\//}"
 MESSAGE="SLURM Job Finished!
 Job Desc: $job_desc
-Job ID  : $JOB_ID
+Job ID  : $job_id
 Job Name: $job_name
 Total Elapsed Time: $total_elapsed seconds
 Last 20 lines of output:"
