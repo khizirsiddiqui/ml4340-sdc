@@ -9,6 +9,7 @@ class RotatingFrameStack:
         self.frames = None 
         self.current_size = 0
         self.dtype = None
+        self.current_idx = 0
 
     def add_frame(self, frame):
         if self.dtype == torch.Tensor and not isinstance(frame, torch.Tensor):
@@ -20,16 +21,20 @@ class RotatingFrameStack:
                 self.frames = frame.repeat(self.max_size, 1, 1, 1)
                 self.current_size = self.max_size
                 self.dtype = torch.Tensor
+                self.current_idx = self.max_size - 1
             else:
-                self.frames = torch.cat((self.frames[1:], frame.unsqueeze(0)), dim=0)
-                self.current_size = min(self.current_size + 1, self.max_size)
+                self.frames[self.current_idx] = frame
+                self.current_idx = self.current_idx - 1 if self.current_idx > 0 else self.max_size - 1
+                self.current_size = max(self.current_size, min(self.max_size, self.max_size - self.current_idx))
         else:
             if self.current_size == 0:
                 self.frames = np.tile(frame, (self.max_size, 1, 1, 1))
                 self.current_size = self.max_size
                 self.dtype = np.ndarray
+                self.current_idx = self.max_size - 1
             else:
-                self.frames = np.concatenate((self.frames[1:], frame[np.newaxis]), axis=0)
+                self.frames[self.current_idx] = frame
+                self.current_idx = self.current_idx - 1 if self.current_idx > 0 else self.max_size - 1
                 self.current_size = min(self.current_size + 1, self.max_size)
 
     def set_data(self, obj):
