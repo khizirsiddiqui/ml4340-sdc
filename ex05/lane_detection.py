@@ -6,6 +6,7 @@ from scipy.optimize import minimize
 import time
 from PIL import Image
 
+from utils import remove_duplicates
 
 class LaneDetection:
     '''
@@ -13,13 +14,13 @@ class LaneDetection:
 
     args: 
         cut_size (cut_size=65) cut the image at the front of the car
-        spline_smoothness (default=10)
+        spline_smoothness (default=0.1) multiplied by number of lane points
         gradient_threshold (default=14)
         distance_maxima_gradient (default=3)
 
     '''
 
-    def __init__(self, cut_size=65, spline_smoothness=10, gradient_threshold=14, distance_maxima_gradient=3):
+    def __init__(self, cut_size=65, spline_smoothness=0.1, gradient_threshold=14, distance_maxima_gradient=3):
         self.car_position = np.array([48,0])
         self.spline_smoothness = spline_smoothness
         self.cut_size = cut_size
@@ -31,7 +32,6 @@ class LaneDetection:
 
     def cut_gray(self, state_image_full):
         '''
-        ##### TODO #####
         This function should cut the image at the front end of the car (e.g. pixel row 65) 
         and translate to grey scale
 
@@ -42,15 +42,14 @@ class LaneDetection:
             gray_state_image 65x96x1
 
         '''
-
-        gray_state_image = ...
-        
+        # crops out the area above self.cut_size
+        cut_image = state_image_full[:self.cut_size, :, :]
+        gray_state_image = cut_image.mean(axis=2) / 255.0
         return gray_state_image[::-1] 
 
 
     def edge_detection(self, gray_image):
         '''
-        ##### TODO #####
         In order to find edges in the gray state image, 
         this function should derive the absolute gradients of the gray state image.
         Derive the absolute gradients using numpy for each pixel. 
@@ -63,15 +62,15 @@ class LaneDetection:
             gradient_sum 65x96x1
 
         '''
-
-        gradient_sum = ...
-        
+        gradient_x = np.abs(np.gradient(gray_image, axis=1))
+        gradient_y = np.abs(np.gradient(gray_image, axis=0))
+        gradient_sum = gradient_x + gradient_y
+        gradient_sum[gradient_sum < self.gradient_threshold / 255.0 ] = 0
         return gradient_sum
 
 
     def find_maxima_gradient_rowwise(self, gradient_sum):
         '''
-        ##### TODO #####
         This function should output arguments of local maxima for each row of the gradient image.
         You can use scipy.signal.find_peaks to detect maxima. 
         Hint: Use distance argument for a better robustness.
@@ -83,9 +82,11 @@ class LaneDetection:
             maxima (np.array) 2x Number_maxima
 
         '''
-
-        argmaxima = ...
-
+        argmaxima = []
+        for row in range(self.cut_size):
+            peaks, _ = find_peaks(gradient_sum[row], distance=self.distance_maxima_gradient)
+            for peak in peaks:
+                argmaxima.append([peak, row])
         return argmaxima
 
 
@@ -152,7 +153,6 @@ class LaneDetection:
 
     def lane_detection(self, state_image_full, time_step=0):
         '''
-        ##### TODO #####
         This function should perform the road detection 
 
         args:
@@ -166,9 +166,12 @@ class LaneDetection:
 
         # to gray
         gray_state = self.cut_gray(state_image_full)
-
+        # debug:
+        # plt.imshow(gray_state[::-1].squeeze(), cmap='gray')
         # edge detection via gradient sum and thresholding
         gradient_sum = self.edge_detection(gray_state)
+        # debug:
+        # plt.imshow(gradient_sum[::-1].squeeze(), cmap='gray')
         maxima = self.find_maxima_gradient_rowwise(gradient_sum)
 
         # first lane_boundary points
@@ -177,34 +180,57 @@ class LaneDetection:
         # if no lane was found,use lane_boundaries of the preceding step
         if lane_found:
             
-            ##### TODO #####
             #  in every iteration: 
             # 1- find maximum/edge with the lowest distance to the last lane boundary point 
             # 2- append maxium to lane_boundary1_points or lane_boundary2_points
             # 3- delete maximum from maxima
             # 4- stop loop if there is no maximum left 
             #    or if the distance to the next one is too big (>=100)
+            too_far = 0
+            while len(maxima) or too_far == 2:
+                # lane_boundary 1
+                last_point = lane_boundary1_points[-1]
+                distances = [np.linalg.norm(np.array(maximum) - last_point) for maximum in maxima]
+                min_distance_index = np.argmin(distances)
+                if distances[min_distance_index] < 100:
+                    lane_boundary1_points = np.vstack((lane_boundary1_points, maxima[min_distance_index]))
+                    maxima.pop(min_distance_index)
+                else:
+                    too_far += 1
 
-            # lane_boundary 1
+                if not len(maxima):
+                    break
 
-            # lane_boundary 2
+                # lane_boundary 2
+                last_point = lane_boundary2_points[-1]
+                distances = [np.linalg.norm(np.array(maximum) - last_point) for maximum in maxima]
+                min_distance_index = np.argmin(distances)
+                if distances[min_distance_index] < 100:
+                    lane_boundary2_points = np.vstack((lane_boundary2_points, maxima[min_distance_index]))
+                    maxima.pop(min_distance_index)
+                else:
+                    too_far += 1
+                if too_far == 2: break
+                too_far = 0
+            lane_boundary1_points = remove_duplicates(lane_boundary1_points)
+            lane_boundary2_points = remove_duplicates(lane_boundary2_points)
 
-            ################
-            
-
-            ##### TODO #####
             # spline fitting using scipy.interpolate.splprep 
             # and the arguments self.spline_smoothness
             # 
             # if there are more lane_boundary points points than spline parameters 
             # else use perceding spline
             if lane_boundary1_points.shape[0] > 4 and lane_boundary2_points.shape[0] > 4:
-                pass
-                # Pay attention: the first lane_boundary point might occur twice
-                # lane_boundary 1
-
-                # lane_boundary 2
-                
+                #### KHIZIR: Ideas for improvements
+                #### 1. temporal smoothing
+                lane_boundary1, _ = splprep(
+                        [lane_boundary1_points[:, 0], lane_boundary1_points[:, 1]],
+                        s=self.spline_smoothness * lane_boundary1_points.shape[0]
+                )
+                lane_boundary2, _ = splprep(
+                        [lane_boundary2_points[:, 0], lane_boundary2_points[:, 1]],
+                        s=self.spline_smoothness * lane_boundary2_points.shape[0]
+                )
             else:
                 lane_boundary1 = self.lane_boundary1_old
                 lane_boundary2 = self.lane_boundary2_old
@@ -232,7 +258,7 @@ class LaneDetection:
         
         plt.gcf().clear()
         plt.imshow(state_image_full[::-1])
-        plt.plot(lane_boundary1_points_points[0], lane_boundary1_points_points[1]+96-self.cut_size, linewidth=5, color='orange')
+        plt.plot(lane_boundary1_points_points[0], lane_boundary1_points_points[1]+96-self.cut_size, linewidth=5, color='blue')
         plt.plot(lane_boundary2_points_points[0], lane_boundary2_points_points[1]+96-self.cut_size, linewidth=5, color='orange')
         if len(waypoints):
             plt.scatter(waypoints[0], waypoints[1]+96-self.cut_size, color='white')

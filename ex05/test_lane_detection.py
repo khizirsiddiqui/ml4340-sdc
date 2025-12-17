@@ -44,6 +44,11 @@ except:
     print("Please note that you can't test lane detection on the cluster")
     exit(1)
 
+
+# skip first 49 frames, send no-op
+for _ in range(49):
+    s, _, _, _, _ = env.step([0, 0, 0])
+
 # define variables
 total_reward = 0.0
 steps = 0

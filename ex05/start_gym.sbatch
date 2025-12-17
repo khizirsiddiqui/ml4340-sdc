@@ -37,6 +37,24 @@
 #c) Execute your file.
 ####
 
-singularity exec --nv ~/sdc_gym_amd64.simg python3 modular_pipeline.py --score --no_display
+
+start_time=$(date +%s)
+singularity exec ~/sdc_gym_amd64.simg bash -x script.sh
+end_time=$(date +%s)
+total_elapsed=$((end_time - start_time))
+job_id=${SLURM_JOB_ID:-"N/A"}
+job_name=${SLURM_JOB_NAME:-"N/A"}
+job_desc=$(grep -m 1 'outdir:' job.${SLURM_JOB_ID}.out | awk '{print $2}')
+job_desc="${job_desc/results\//}"
+MESSAGE="SLURM Job Finished!
+Job Desc: $job_desc
+Job ID  : $job_id
+Job Name: $job_name
+Total Elapsed Time: $total_elapsed seconds
+Last 20 lines of output:"
+MESSAGE=$MESSAGE$(tail -n 20 job.${SLURM_JOB_ID}.out)
+cd ~/util-scripts
+bash send_tg.sh "$MESSAGE"
+echo
 
 echo DONE!

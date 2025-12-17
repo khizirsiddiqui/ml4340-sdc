@@ -44,6 +44,10 @@ except:
     print("Please note that you can't test longitudinal control on the cluster")
     exit(1)
 
+# skip first 49 frames, send no-op
+for _ in range(49):
+    s, _, _, _, _ = env.step([0, 0, 0])
+
 # define variables
 total_reward = 0.0
 steps = 0
@@ -75,7 +79,7 @@ while not control_status.quit:
     target_speed = target_speed_prediction(waypoints, max_speed=60, exp_constant=4.5)
 
     # control
-    a[0] = LatC_module.stanley(waypoints, speed)
+    a[0] = LatC_module.stanley(waypoints, speed, time_step=steps)
     a[1], a[2] = LongC_module.control(speed, target_speed)
 
     # reward
