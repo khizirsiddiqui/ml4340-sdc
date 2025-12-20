@@ -1,5 +1,6 @@
-import numpy as np
 from scipy.interpolate import splprep, splev
+import numpy as np
+import json
 
 def remove_duplicates(points, tol=1e-6):
     diffs = np.sqrt(np.sum(np.diff(points, axis=0)**2, axis=1))
@@ -41,3 +42,8 @@ def distance_point_to_line(point, list_of_points_on_line, smoothing=0.1):
             sign = np.sign(cross)
     min_dist *= sign
     return min_dist
+
+def get_config(path='config.json'):
+    with open(path, 'r') as f:
+        config = json.load(f)
+    return config

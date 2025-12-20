@@ -27,7 +27,7 @@ class ControlStatus:
                 self.key_press(event)
 
         keys = pygame.key.get_pressed()
-        self.accelerate = 1 if keys[pygame.K_UP] else 0
+        self.accelerate = 0.9 if keys[pygame.K_UP] else 0
         self.brake = 0.8 if keys[pygame.K_DOWN] else 0  # set 1.0 for wheels to block to zero rotation
         self.steer = 1 if keys[pygame.K_RIGHT] else (-1 if keys[pygame.K_LEFT] else 0)
 
@@ -44,10 +44,6 @@ except:
     print("Please note that you can't test lane detection on the cluster")
     exit(1)
 
-
-# skip first 49 frames, send no-op
-for _ in range(49):
-    s, _, _, _, _ = env.step([0, 0, 0])
 
 # define variables
 total_reward = 0.0
@@ -67,7 +63,7 @@ plt.show()
 done = False
 while not control_status.quit:
     # lane detection
-    splines = LD_module.lane_detection(s)
+    splines = LD_module.lane_detection(s, steps)
 
     # perform step
     control_status.update()
@@ -92,3 +88,6 @@ while not control_status.quit:
         s, _ = env.reset()
 
 env.close()
+
+# save LD_module.gradient_frames as a gif
+LD_module.save_gradient_frames_as_gif("lane_detection_output.gif")

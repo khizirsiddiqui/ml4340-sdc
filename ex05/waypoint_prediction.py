@@ -15,7 +15,7 @@ def curvature(waypoints):
     Curvature as  the sum of the normalized dot product between the way elements
     Implement second term of the smoothin objective.
 
-    args: 
+    args:
         waypoints [2, num_waypoints] !!!!!
     '''
     dir_vectors = waypoints[:,1:] - waypoints[:,:-1]
@@ -43,11 +43,11 @@ def smoothing_objective(waypoints, waypoints_center, weight_curvature=40):
     return ls_tocenter - weight_curvature * curv
 
 
-def waypoint_prediction(roadside1_spline, roadside2_spline, time_step=0, num_waypoints=6, way_type = "smooth"):
+def waypoint_prediction(roadside1_spline, roadside2_spline, time_step=0, num_waypoints=10, way_type = "smooth"):
     '''
     Predict waypoint via two different methods:
     - center
-    - smooth 
+    - smooth
 
     args:
         roadside1_spline
@@ -71,15 +71,18 @@ def waypoint_prediction(roadside1_spline, roadside2_spline, time_step=0, num_way
     if way_type == "center":
         way_points = get_center_waypoints()
         return way_points
-    
+
     elif way_type == "smooth":
         way_points_center = get_center_waypoints().flatten()
         # optimization
-        way_points = minimize(smoothing_objective, 
-                      (way_points_center), 
+        way_points = minimize(smoothing_objective,
+                      (way_points_center),
                       args=way_points_center)["x"]
 
-        return way_points.reshape(2,-1)
+        waypoints = way_points.reshape(2,-1)
+        num_waypoints = waypoints.shape[1]
+
+        return waypoints
 
 
 def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_speed=60, exp_constant=4.5, offset_speed=30):
@@ -94,7 +97,7 @@ def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_sp
         max_speed (default=60)
         exp_constant (default=4.5)
         offset_speed (default=30)
-    
+
     output:
         target_speed (float)
     '''

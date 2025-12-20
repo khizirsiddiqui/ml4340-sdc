@@ -45,10 +45,6 @@ except:
     print("Please note that you can't test lateral control on the cluster")
     exit(1)
 
-# skip first 49 frames, send no-op
-for _ in range(49):
-    s, _, _, _, _ = env.step([0, 0, 0])
-
 # define variables
 total_reward = 0.0
 steps = 0
@@ -75,11 +71,11 @@ while not control_status.quit:
     a[2] = control_status.brake
 
     # lane detection
-    lane1, lane2 = LD_module.lane_detection(s)
+    lane1, lane2 = LD_module.lane_detection(s, steps)
 
     # waypoint and target_speed prediction
-    waypoints = waypoint_prediction(lane1, lane2)
-    target_speed = target_speed_prediction(waypoints)
+    waypoints = waypoint_prediction(lane1, lane2, time_step=steps)
+    target_speed = target_speed_prediction(waypoints, time_step=steps)
 
     # control with constant gas and no braking
     a[0] = LatC_module.stanley(waypoints, speed, time_step=steps)
