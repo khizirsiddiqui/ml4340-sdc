@@ -74,7 +74,8 @@ class LongitudinalController:
             gas
             brake
         '''
-
+        if time_step < 50:
+            return 0.9, 0.0
         control = self.PID_step(speed, target_speed)
         brake = 0
         gas = 0

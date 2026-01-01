@@ -34,7 +34,6 @@ def evaluate(env):
         for t in range(600):
             # lane detection
             lane1, lane2 = LD_module.lane_detection(s, t)
-            #print('lane1, lane2 ',lane1, lane2)
 
             # waypoint and target_speed prediction
             waypoints = waypoint_prediction(lane1, lane2, t)
@@ -62,7 +61,7 @@ def calculate_score_for_leaderboard(env):
     of seeds. Better not change it.
     """
     # These are not the final evaluation seeds, do not overfit on these tracks!
-    seeds = [97657630, 47460391, 22619914, 76925063, 84647422, 
+    seeds = [97657630, 47460391, 22619914, 76925063, 84647422,
             83470445, 77482096, 94017676, 99341122, 58134947]
 
     total_reward = 0

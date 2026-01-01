@@ -67,11 +67,11 @@ while not control_status.quit:
     s, r, done, speed, info = env.step(a)
 
     # lane detection
-    lane1, lane2 = LD_module.lane_detection(s)
+    lane1, lane2 = LD_module.lane_detection(s, steps)
 
     # waypoint and target_speed prediction
-    waypoints = waypoint_prediction(lane1, lane2)
-    target_speed = target_speed_prediction(waypoints)
+    waypoints = waypoint_prediction(lane1, lane2, steps)
+    target_speed = target_speed_prediction(waypoints, steps)
 
     # reward
     total_reward += r
