@@ -4,7 +4,7 @@ import pygame
 from sdc_wrapper import SDC_Wrapper
 
 from lane_detection import LaneDetection
-from waypoint_prediction import waypoint_prediction, target_speed_prediction
+from waypoint_prediction import waypoint_prediction, target_speed_prediction, plot_curvature_history
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -94,3 +94,5 @@ while not control_status.quit:
         s, _ = env.reset()
 
 env.close()
+
+plot_curvature_history()

@@ -1,17 +1,21 @@
 #!/bin/bash
 
-NO_DISPLAY='--no_display'
 start_time=$(date +%s)
 t0=$(date +%s)
 
 if [ -n "$SLURM_JOB_ID" ]; then
+NO_DISPLAY='--no_display'
 SCORE='--score'
+SCRIPT_PY="modular_pipeline.py"
 else
-SCORE=''
+SCORE='--score'
+SCRIPT_PY="local_test.py"
+NO_DISPLAY=''
 fi
+
 echo ">> Evaluating model"
-python3 modular_pipeline.py $SCORE $NO_DISPLAY
 t1=$(date +%s)
+python3 $SCRIPT_PY $SCORE $NO_DISPLAY
 elapsed=$(( t1 - t0 ))
 echo "== Evaluation completed in $elapsed seconds."
 echo

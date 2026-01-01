@@ -160,33 +160,56 @@ class LaneFindingVanilla:
         # first lane_boundary points
         lane_boundary1_points, lane_boundary2_points, lane_found = self.find_first_lane_point(gradient_sum, base)
 
-        # if no lane was found,use lane_boundaries of the preceding step
-        too_far = 0
-        while len(maxima) or too_far == 2:
-            # lane_boundary 1
-            last_point = lane_boundary1_points[-1]
-            distances = [np.linalg.norm(np.array(maximum) - last_point) for maximum in maxima]
-            min_distance_index = np.argmin(distances)
-            if distances[min_distance_index] < 100:
-                lane_boundary1_points = np.vstack((lane_boundary1_points, maxima[min_distance_index]))
-                maxima.pop(min_distance_index)
-            else:
-                too_far += 1
+        LOOKAHEAD_ROWS = 5
+        MAX_X_SHIFT = 15
+        def get_next_point(current_points, available_maxima):
+            if len(available_maxima) == 0:
+                return None, available_maxima
+            last_point = current_points[-1]
+            last_x, last_y = last_point[0], last_point[1]
 
-            if not len(maxima):
-                break
+            candidates_idx = [i for i, m in enumerate(available_maxima) if 0 < m[1] - last_y <= LOOKAHEAD_ROWS]
+            if not candidates_idx:
+                return None, available_maxima
 
-            # lane_boundary 2
-            last_point = lane_boundary2_points[-1]
-            distances = [np.linalg.norm(np.array(maximum) - last_point) for maximum in maxima]
-            min_distance_index = np.argmin(distances)
-            if distances[min_distance_index] < 100:
-                lane_boundary2_points = np.vstack((lane_boundary2_points, maxima[min_distance_index]))
-                maxima.pop(min_distance_index)
-            else:
-                too_far += 1
-            if too_far == 2: break
-            too_far = 0
+            best_idx = -1
+            min_x_distance = MAX_X_SHIFT
+            for i in candidates_idx:
+                cur_x = available_maxima[i][0]
+                x_distance = abs(cur_x - last_x) + abs(available_maxima[i][1] - last_y) * 0.5
+                if x_distance < min_x_distance:
+                    min_x_distance = x_distance
+                    best_idx = i
+            if best_idx == -1:
+                return None, available_maxima
+            next_point = available_maxima[best_idx]
+            available_maxima.pop(best_idx)
+            return next_point, available_maxima
+
+        keep_searching_1 = True
+        keep_searching_2 = True
+        while keep_searching_1 or keep_searching_2:
+            if keep_searching_1:
+                next_point1, maxima = get_next_point(lane_boundary1_points.tolist(), maxima)
+            if keep_searching_2:
+                next_point2, maxima = get_next_point(lane_boundary2_points.tolist(), maxima)
+
+            if keep_searching_2 and keep_searching_1:
+                if next_point1 is not None and next_point2 is not None:
+                    if next_point1[0] > next_point2[0] and abs(next_point1[1] - next_point2[1]) <= 1:
+                        next_point1, next_point2 = next_point2, next_point1
+
+            if keep_searching_2:
+                if next_point2 is not None:
+                    lane_boundary2_points = np.vstack([lane_boundary2_points, next_point2])
+                else:
+                    keep_searching_2 = False
+            if keep_searching_1:
+                if next_point1 is not None:
+                    lane_boundary1_points = np.vstack([lane_boundary1_points, next_point1])
+                else:
+                    keep_searching_1 = False
+
         lane_boundary1_points = remove_duplicates(lane_boundary1_points)
         lane_boundary2_points = remove_duplicates(lane_boundary2_points)
         return lane_boundary1_points, lane_boundary2_points, lane_found
@@ -373,6 +396,8 @@ class LaneDetectionVanilla(LaneDetectionBase):
             lane_boundary1 spline
             lane_boundary2 spline
         '''
+        if time_step < 50:
+            return self.lane_boundary1_old, self.lane_boundary2_old
         # to gray
         gray_state = self.cut_gray(state_image_full)
         # debug:
@@ -414,10 +439,17 @@ class LaneDetectionVanilla(LaneDetectionBase):
             lane_boundary1 = self.lane_boundary1_old
             lane_boundary2 = self.lane_boundary2_old
 
+        # account for curves in smoothing param
+        def compute_smoothing_param(num_points):
+            if num_points > 15:
+                return self.spline_smoothness * num_points * 0.4
+            else:
+                return self.spline_smoothness * num_points
+
         # temporal smoothing
-        resolution = self.spline_smoothness * lane_boundary1_points.shape[0]
+        resolution = compute_smoothing_param(lane_boundary1_points.shape[0])
         lane_boundary1 = self.smoother_lane1.smooth_boundary(lane_boundary1, self.lane_boundary1_old, resolution=resolution)
-        resolution = self.spline_smoothness * lane_boundary2_points.shape[0]
+        resolution = compute_smoothing_param(lane_boundary2_points.shape[0])
         lane_boundary2 = self.smoother_lane2.smooth_boundary(lane_boundary2, self.lane_boundary2_old, resolution=resolution)
 
         self.lane_boundary1_old = lane_boundary1

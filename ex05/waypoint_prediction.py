@@ -6,6 +6,9 @@ from scipy.optimize import minimize
 import time
 
 old_waypoint_predictions = None
+old_target_speed = None
+
+curvature_history = []
 
 def normalize(v):
     norm = np.linalg.norm(v,axis=0) + 1e-5
@@ -70,6 +73,14 @@ def waypoint_prediction(roadside1_spline, roadside2_spline, time_step=0, num_way
         waytype (default="smoothed")
     '''
     global old_waypoint_predictions
+    global curvature_history
+
+    if time_step < 50:
+        waypoints = np.zeros((2, num_waypoints))
+        waypoints[0, :] = 48
+        waypoints[1, :] = np.linspace(0, num_waypoints - 1, num_waypoints)
+        return waypoints
+
     def get_center_waypoints():
         # create spline arguments
         spline_args = np.linspace(time_step, time_step + 1, num_waypoints)
@@ -121,7 +132,20 @@ def waypoint_prediction(roadside1_spline, roadside2_spline, time_step=0, num_way
     if old_waypoint_predictions is None:
         old_waypoint_predictions = waypoints
 
+    curvature_history.append(curvature2(waypoints))
     return waypoints
+
+def plot_curvature_history():
+    global curvature_history
+    # curvature_history is a list of curvature values over time
+    plt.figure()
+    plt.plot(curvature_history)
+    plt.title("Curvature History")
+    plt.xlabel("Time Step")
+    plt.ylabel("Curvature")
+    plt.yscale("log")
+    plt.grid()
+    plt.savefig("curvature_history.png")
 
 
 def target_speed_prediction_old(waypoints, time_step=0, num_waypoints_used=5, max_speed=60, exp_constant=4.5, offset_speed=30):
@@ -145,7 +169,7 @@ def target_speed_prediction_old(waypoints, time_step=0, num_waypoints_used=5, ma
     target_speed = (max_speed - offset_speed) * np.exp(-exp_constant * np.abs(num_waypoints_used - 2 - curv)) + offset_speed
     return target_speed
 
-def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_speed=65, exp_constant=4.5, offset_speed=30):
+def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_speed=50, offset_speed=20):
     '''
     Predict target speed given waypoints
     Implement the function using curvature()
@@ -155,21 +179,32 @@ def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_sp
         time_step(int)
         num_waypoints_used (default=5)
         max_speed (default=60)
-        exp_constant (default=4.5)
         offset_speed (default=30)
 
     output:
         target_speed (float)
     '''
+    global old_target_speed
     if time_step < 50:
+        old_target_speed = max_speed
         return max_speed
+    num_waypoints_used = int(num_waypoints_used + int(old_target_speed / 15))
     curv = curvature2(waypoints[:,:num_waypoints_used])
 
     with np.errstate(divide='ignore'):
         radius = 1.0 / (curv + 1e-8)
 
     radius = np.maximum(3, radius)
-    v_limit = 15 * np.sqrt(radius)
+    v_limit = 5 * np.sqrt(radius)
     safe_v = np.percentile(v_limit, 10)
     target_v = np.clip(safe_v, offset_speed, max_speed)
+    if old_target_speed is not None:
+        if target_v > old_target_speed:
+            # accelerate slowly
+            target_v = 0.9 * old_target_speed + 0.1 * target_v
+        else:
+            # brake quickly
+            target_v = 0.3 * old_target_speed + 0.7 * target_v
+    else:
+        old_target_speed = target_v
     return target_v

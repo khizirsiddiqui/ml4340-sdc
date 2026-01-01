@@ -87,20 +87,20 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.plot(waypoints[0, :], waypoints[1, :], label='Waypoints')
-    for damping_constant in [0.3, 0.5, 0.8]:
-        LatC_module = LateralController(damping_constant=damping_constant)
-        car_trajectory, distances = test_lc(LatC_module, waypoints, speed, car_initial_pos)
-        car_trajectory = np.array(car_trajectory)
-        mean_distance = np.mean(distances)
-        plt.plot(car_trajectory[:, 0], car_trajectory[:, 1], linewidth=2, label=f'Car Trajectory (damping={damping_constant}), mean dist={mean_distance:.2f}px')
-
-    # for gain in [2.5, 5.0, 7.5, 10]:
-    #     LatC_module = LateralController(gain_constant=gain)
+    # for damping_constant in [0.3, 0.5, 0.8]:
+    #     LatC_module = LateralController(damping_constant=damping_constant)
     #     car_trajectory, distances = test_lc(LatC_module, waypoints, speed, car_initial_pos)
     #     car_trajectory = np.array(car_trajectory)
     #     mean_distance = np.mean(distances)
-    #     plt.plot(car_trajectory[:, 0], car_trajectory[:, 1], linewidth=2, label=f'Car Trajectory (gain={gain}), mean dist={mean_distance:.2f}px')
-    #
+    #     plt.plot(car_trajectory[:, 0], car_trajectory[:, 1], linewidth=2, label=f'Car Trajectory (damping={damping_constant}), mean dist={mean_distance:.2f}px')
+
+    for gain in [2.5, 5.0, 7.5, 10]:
+        LatC_module = LateralController(gain_constant=gain)
+        car_trajectory, distances = test_lc(LatC_module, waypoints, speed, car_initial_pos)
+        car_trajectory = np.array(car_trajectory)
+        mean_distance = np.mean(distances)
+        plt.plot(car_trajectory[:, 0], car_trajectory[:, 1], linewidth=2, label=f'Car Trajectory (gain={gain}), mean dist={mean_distance:.2f}px')
+
     # plot car starting car_position
     plt.plot(car_initial_pos[0], car_initial_pos[1], 'ro', label='Car Start Position')
     plt.axis('equal')

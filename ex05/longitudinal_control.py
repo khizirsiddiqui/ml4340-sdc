@@ -14,7 +14,7 @@ class LongitudinalController:
         PID_step()
         control()
     '''
-    def __init__(self, KP=0.2, KI=.05, KD=0.1, max_sum_error=1000):
+    def __init__(self, KP=0.6, KD=0.01, KI=0.05, max_sum_error=1000):
         self.last_error = 0
         self.sum_error = 0
         self.max_sum_error = max_sum_error
@@ -51,9 +51,13 @@ class LongitudinalController:
 
         controller_p = self.KP * error
 
-        self.filtered_derivative = 0.2 * self.filtered_derivative + 0.8 * (error - self.last_error)
+        derivate = error - self.last_error
+        self.filtered_derivative = 0.8 * self.filtered_derivative + 0.2 * derivate
         controller_d = self.KD * self.filtered_derivative
+
         controller_i = self.KI * self.sum_error
+        if abs(self.sum_error) > self.max_sum_error * 0.7:
+            controller_i = controller_i * 1.5
 
         control = controller_p + controller_i + controller_d
 

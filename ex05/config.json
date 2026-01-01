@@ -1,0 +1,29 @@
+{
+  "lane_detection": {
+    "module": "vanilla",
+    "params": {
+      "cut_size": 65,
+      "spline_smoothness": 5,
+      "gradient_threshold": 14,
+      "distance_maxima_gradient": 3,
+
+      "sliding_window": false,
+      "sliding_window_margin": 3,
+      "sliding_window_nwindows": 5,
+      "sliding_window_min_signal": 5
+    }
+  },
+  "longitudinal_controller": {
+    "module": "pid",
+    "params": {
+      "_KP": 0.2,
+      "_KI": 0.05,
+      "_KD": 0.01,
+      "KP_gas": 0.8,
+      "KP_break": 0.8,
+      "KI": 0,
+      "KD": 0,
+      "max_sum_error": 1000
+    }
+  }
+}
