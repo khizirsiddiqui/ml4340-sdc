@@ -90,5 +90,5 @@ while not control_status.quit:
 env.close()
 
 # save LD_module.gradient_frames as a gif
-LD_module.save_gradient_frames_as_gif("lane_detection_output.gif")
+LD_module.save_gradient_frames_as_gif("out_lane_detection.gif")
 LD_module.plot_window_gift("window.gif")

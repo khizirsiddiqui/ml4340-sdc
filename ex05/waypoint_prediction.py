@@ -169,7 +169,7 @@ def target_speed_prediction_old(waypoints, time_step=0, num_waypoints_used=5, ma
     target_speed = (max_speed - offset_speed) * np.exp(-exp_constant * np.abs(num_waypoints_used - 2 - curv)) + offset_speed
     return target_speed
 
-def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_speed=50, offset_speed=20):
+def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_speed=60, offset_speed=15):
     '''
     Predict target speed given waypoints
     Implement the function using curvature()
@@ -188,15 +188,22 @@ def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_sp
     if time_step < 50:
         old_target_speed = max_speed
         return max_speed
-    num_waypoints_used = int(num_waypoints_used + int(old_target_speed / 15))
-    curv = curvature2(waypoints[:,:num_waypoints_used])
+
+    num_waypoints_used = int(num_waypoints_used + old_target_speed / 5)
+    future_waypoints = waypoints[:, :num_waypoints_used]
+
+    max_curv = 0
+    for i in range(len(future_waypoints[0]) - 2):
+        p_segment = future_waypoints[:, i:i+3]
+        curv_segment = curvature2(p_segment)
+        current_max = np.max(curv_segment)
+        if current_max > max_curv:
+            max_curv = current_max
 
     with np.errstate(divide='ignore'):
-        radius = 1.0 / (curv + 1e-8)
+        radius = 1.0 / (max_curv + 1e-8)
 
-    radius = np.maximum(3, radius)
-    v_limit = 5 * np.sqrt(radius)
-    safe_v = np.percentile(v_limit, 10)
+    safe_v = 2 * np.sqrt(radius)
     target_v = np.clip(safe_v, offset_speed, max_speed)
     if old_target_speed is not None:
         if target_v > old_target_speed:
@@ -207,4 +214,9 @@ def target_speed_prediction(waypoints, time_step=0, num_waypoints_used=5, max_sp
             target_v = 0.3 * old_target_speed + 0.7 * target_v
     else:
         old_target_speed = target_v
+
+    # if waypoints are close to each other, reduce speed because they are noisy
+    dists = np.linalg.norm(waypoints[:,1:] - waypoints[:,:-1], axis=0)
+    if np.mean(dists) < 2.0:
+        target_v = 0.7 * target_v
     return target_v

@@ -98,13 +98,14 @@ class LongitudinalControllerBase:
         self.speed_history.append(speed)
         self.target_speed_history.append(target_speed)
         self.step_history.append(step)
-        plt.gcf().clear()
-        plt.plot(self.step_history, self.speed_history, c="green")
-        plt.plot(self.step_history, self.target_speed_history)
+        ax = fig.gca()
+        ax.clear()
+        ax.plot(self.step_history, self.speed_history, c="green")
+        ax.plot(self.step_history, self.target_speed_history)
 
         # plot error as well
         error = np.array(self.target_speed_history) - np.array(self.speed_history)
-        plt.fill_between(self.step_history, self.target_speed_history, self.speed_history, color='red', alpha=0.2)
+        ax.fill_between(self.step_history, self.target_speed_history, self.speed_history, color='red', alpha=0.2)
 
         # show a circle with color depending on the self.sum_error with text as self.sum_error
         # color is a scale from green (low error) to red (high error)
@@ -113,8 +114,8 @@ class LongitudinalControllerBase:
         color = (error_ratio, 1 - error_ratio, 0)
         circle = Circle((0.9, 0.1), 0.05, color=color, transform=plt.gca().transAxes)
         # add text to circle
-        plt.gca().text(0.9, 0.1, f"{self.sum_error:.1f}", color='black', fontsize=8, ha='center', va='center', transform=plt.gca().transAxes)
-        plt.gca().add_patch(circle)
+        ax.text(0.9, 0.1, f"{self.sum_error:.1f}", color='black', fontsize=8, ha='center', va='center', transform=plt.gca().transAxes)
+        ax.add_patch(circle)
 
         try:
             fig.canvas.flush_events()

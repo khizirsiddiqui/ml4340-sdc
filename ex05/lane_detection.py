@@ -431,12 +431,20 @@ class LaneDetectionBase:
         resolution = compute_smoothing_param(lane_boundary2_points.shape[0])
         lane_boundary2 = self.smoother_lane2.smooth_boundary(lane_boundary2, self.lane_boundary2_old, resolution=resolution)
 
-        # lane1 is always left and lane2 right
-        t_test = np.linspace(0, 1, 6)
-        lane1_points_test = np.array(splev(t_test, lane_boundary1))
-        lane2_points_test = np.array(splev(t_test, lane_boundary2))
-        if lane1_points_test[0].mean() > lane2_points_test[0].mean():
-            lane_boundary1, lane_boundary2 = lane_boundary2, lane_boundary1
+        # lane1 and lane2 swap check
+        if self.lane_boundary1_old[1] is not None and self.lane_boundary2_old[1] is not None:
+            t_test = np.linspace(0, 1, 6)
+            lane1_points_test = np.array(splev(t_test, lane_boundary1))
+            lane2_points_test = np.array(splev(t_test, lane_boundary2))
+            old_lane1_points_test = np.array(splev(t_test, self.lane_boundary1_old))
+            old_lane2_points_test = np.array(splev(t_test, self.lane_boundary2_old))
+
+            d1_p1 = np.linalg.norm(lane1_points_test - old_lane1_points_test)
+            d1_p2 = np.linalg.norm(lane1_points_test - old_lane2_points_test)
+            d2_p1 = np.linalg.norm(lane2_points_test - old_lane1_points_test)
+            d2_p2 = np.linalg.norm(lane2_points_test - old_lane2_points_test)
+            if d1_p2 + d2_p1 < d1_p1 + d2_p2:
+                lane_boundary1, lane_boundary2 = lane_boundary2, lane_boundary1
 
         self.lane_boundary1_old = lane_boundary1
         self.lane_boundary2_old = lane_boundary2
