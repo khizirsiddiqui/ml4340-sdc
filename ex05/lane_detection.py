@@ -4,6 +4,7 @@ from scipy.signal import find_peaks
 from scipy.interpolate import splprep, splev
 from scipy.optimize import minimize
 from scipy.ndimage import gaussian_filter1d
+from scipy import ndimage
 import time
 from PIL import Image
 import PIL.ImageDraw as ImageDraw
@@ -113,8 +114,9 @@ class LaneFindingVanilla:
 
         '''
         cut_size = base.cut_size
+        if len(gradient_sum.shape) == 3:
+            gradient_sum = gradient_sum.squeeze(-1)
         maxima = self.find_maxima_gradient_rowwise(gradient_sum, base)
-
         # first lane_boundary points
         lane_boundary1_points, lane_boundary2_points, lane_found = self.find_first_lane_point(gradient_sum, base)
 
@@ -144,32 +146,33 @@ class LaneFindingVanilla:
             available_maxima.pop(best_idx)
             return next_point, available_maxima
 
-        keep_searching_1 = True
-        keep_searching_2 = True
-        while keep_searching_1 or keep_searching_2:
-            if keep_searching_1:
-                next_point1, maxima = get_next_point(lane_boundary1_points.tolist(), maxima)
-            if keep_searching_2:
-                next_point2, maxima = get_next_point(lane_boundary2_points.tolist(), maxima)
+        if lane_found:
+            keep_searching_1 = True
+            keep_searching_2 = True
+            while keep_searching_1 or keep_searching_2:
+                if keep_searching_1:
+                    next_point1, maxima = get_next_point(lane_boundary1_points.tolist(), maxima)
+                if keep_searching_2:
+                    next_point2, maxima = get_next_point(lane_boundary2_points.tolist(), maxima)
 
-            if keep_searching_2 and keep_searching_1:
-                if next_point1 is not None and next_point2 is not None:
-                    if next_point1[0] > next_point2[0] and abs(next_point1[1] - next_point2[1]) <= 1:
-                        next_point1, next_point2 = next_point2, next_point1
+                if keep_searching_2 and keep_searching_1:
+                    if next_point1 is not None and next_point2 is not None:
+                        if next_point1[0] > next_point2[0] and abs(next_point1[1] - next_point2[1]) <= 1:
+                            next_point1, next_point2 = next_point2, next_point1
 
-            if keep_searching_2:
-                if next_point2 is not None:
-                    lane_boundary2_points = np.vstack([lane_boundary2_points, next_point2])
-                else:
-                    keep_searching_2 = False
-            if keep_searching_1:
-                if next_point1 is not None:
-                    lane_boundary1_points = np.vstack([lane_boundary1_points, next_point1])
-                else:
-                    keep_searching_1 = False
+                if keep_searching_2:
+                    if next_point2 is not None:
+                        lane_boundary2_points = np.vstack([lane_boundary2_points, next_point2])
+                    else:
+                        keep_searching_2 = False
+                if keep_searching_1:
+                    if next_point1 is not None:
+                        lane_boundary1_points = np.vstack([lane_boundary1_points, next_point1])
+                    else:
+                        keep_searching_1 = False
 
-        lane_boundary1_points = remove_duplicates(lane_boundary1_points)
-        lane_boundary2_points = remove_duplicates(lane_boundary2_points)
+            lane_boundary1_points = remove_duplicates(lane_boundary1_points)
+            lane_boundary2_points = remove_duplicates(lane_boundary2_points)
         return lane_boundary1_points, lane_boundary2_points, lane_found
 
 class LaneFindingSlidingWindow(LaneFindingVanilla):
@@ -273,6 +276,89 @@ class LaneFindingSlidingWindow(LaneFindingVanilla):
             loop=0
         )
 
+class LaneFindingContourMethod:
+    def __init__(self):
+        self.color_dist = {'Lane': {'Lower': np.array([0, 0, 90]), 'Upper': np.array([10, 10, 120])}}
+        self.min_area = 20
+        self.lane_area_min = 600
+        self.lane_area_max = 5000
+        self.img = None
+        self.img_HSV = None
+        self.lane_mask = None
+        self.img_idx = 0
+
+    def to_hsv(self, img):
+        pil_img = Image.fromarray(img)
+        pil_img_hsv = pil_img.convert("HSV")
+        img_hsv = np.array(pil_img_hsv)
+        return img_hsv
+
+    def find_lane_mask(self, img):
+        self.img = img
+        self.img_HSV = self.to_hsv(self.img)
+        lower = self.color_dist['Lane']['Lower']
+        upper = self.color_dist['Lane']['Upper']
+        lane_mask_bool = (
+                (self.img_HSV[..., 0] >= lower[0]) & (self.img_HSV[..., 0] <= upper[0]) &
+                (self.img_HSV[..., 1] >= lower[1]) & (self.img_HSV[..., 1] <= upper[1]) &
+                (self.img_HSV[..., 2] >= lower[2]) & (self.img_HSV[..., 2] <= upper[2])
+        )
+        lane_mask = lane_mask_bool.astype(np.uint8)
+        self.lane_mask = lane_mask
+        # flip the mask for correct orientation - upside down
+        for row in range(lane_mask.shape[0] // 2):
+            temp = np.copy(lane_mask[row, :])
+            lane_mask[row, :] = lane_mask[lane_mask.shape[0] - 1 - row, :]
+            lane_mask[lane_mask.shape[0] - 1 - row, :] = temp
+        # self.save_lane_mask()
+        return lane_mask, None, None
+
+    def save_lane_mask(self):
+        plt.imshow(self.lane_mask, cmap='gray')
+        plt.axis('off')
+        plt.xlim((-0.5,95.5))
+        plt.ylim((-0.5,64.5))
+        plt.gca().axes.get_xaxis().set_visible(False)
+        plt.gca().axes.get_yaxis().set_visible(False)
+        plt.savefig(f'lane_mask_{self.img_idx:04d}.png', bbox_inches='tight', pad_inches=0)
+        self.img_idx += 1
+
+    def find_lanes(self, img):
+        # Label connected components (equivalent to RETR_EXTERNAL contours)
+        structure = np.ones((3,3), dtype=np.uint8)  # 8-connectivity
+        labels, num_labels = ndimage.label(lane_mask, structure=structure)
+
+        # Process each labeled region
+        for i in range(1, num_labels + 1):  # Skip background (label 0)
+            # Create mask for this specific region
+            region_mask = (labels == i)
+            area = np.sum(region_mask)
+            if area < self.min_area:
+                # Fill with black (0) - remove small contours
+                lane_mask[region_mask] = 0
+            elif self.lane_area_min <= area <= self.lane_area_max:
+                # Fill with white (255) - keep valid lane contours
+                lane_mask[region_mask] = 1
+            # else: leave unchanged (contours outside both ranges remain as-is)
+
+        self.lane_mask = lane_mask
+        return lane_mask, labels, num_labels
+        plt.gcf().clear()
+        lane_mask, labels, num_labels = self.find_lane_mask(img)
+        plt.imshow(self.lane_mask, cmap='gray')
+        for i in range(1, num_labels + 1):
+            region_mask = (labels == i)
+            area = np.sum(region_mask)
+            if self.lane_area_min <= area <= self.lane_area_max:
+                coords = np.column_stack(np.where(region_mask))
+                plt.scatter(coords[:, 1], coords[:, 0], s=1, color='red' if i == 1 else 'blue')
+        plt.axis('off')
+        plt.xlim((-0.5,95.5))
+        plt.ylim((-0.5,64.5))
+        plt.gca().axes.get_xaxis().set_visible(False)
+        plt.gca().axes.get_yaxis().set_visible(False)
+        plt.savefig('contour_debug.png', bbox_inches='tight', pad_inches=0)
+
 class LaneDetectionBase:
     '''
     Lane detection module using edge detection and b-spline fitting
@@ -303,6 +389,7 @@ class LaneDetectionBase:
             self.FindLanes = LaneFindingSlidingWindow()
         else:
             self.FindLanes = LaneFindingVanilla()
+        self.testMethod = LaneFindingContourMethod()
 
     def cut_gray(self, state_image_full):
         '''
@@ -318,8 +405,9 @@ class LaneDetectionBase:
         '''
         # crops out the area above self.cut_size
         cut_image = state_image_full[:self.cut_size, :, :]
-        gray_state_image = cut_image.mean(axis=2) / 255.0
-        return gray_state_image[::-1]
+        out, _, _ = self.testMethod.find_lane_mask(cut_image)
+        return out
+
 
 
     def edge_detection(self, gray_image):
@@ -338,9 +426,9 @@ class LaneDetectionBase:
         '''
         gradient_x = np.abs(np.gradient(gray_image, axis=1))
         gradient_y = np.abs(np.gradient(gray_image, axis=0))
-        gradient_sum = gradient_x + gradient_y
-        gradient_sum[gradient_sum < self.gradient_threshold / 255.0 ] = 0
-        gradient_sum[gradient_sum >= self.gradient_threshold / 255.0 ] = 1
+        gradient_sum = ( gradient_x + gradient_y ) * 255.0
+        gradient_sum[gradient_sum < self.gradient_threshold / 255] = 0
+        gradient_sum[gradient_sum >= self.gradient_threshold / 255] = int(1)
         gradient_sum = gaussian_filter1d(gradient_sum, sigma=2)
         return gradient_sum
 
@@ -378,12 +466,12 @@ class LaneDetectionBase:
         '''
         if time_step < 50:
             return self.lane_boundary1_old, self.lane_boundary2_old
+        # self.testMethod.find_lanes(state_image_full)
         # to gray
         gray_state = self.cut_gray(state_image_full)
         # debug:
         # plt.imshow(gray_state[::-1].squeeze(), cmap='gray')
         # edge detection via gradient sum and thresholding
-
         gradient_sum = self.edge_detection(gray_state)
         self.gradient_frames.append(gradient_sum)
         # debug:

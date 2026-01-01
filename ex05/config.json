@@ -7,7 +7,7 @@
       "gradient_threshold": 14,
       "distance_maxima_gradient": 3,
 
-      "sliding_window": true,
+      "sliding_window": false,
       "sliding_window_margin": 3,
       "sliding_window_nwindows": 5,
       "sliding_window_min_signal": 5
