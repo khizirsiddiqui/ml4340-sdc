@@ -6,7 +6,9 @@ from scipy.interpolate import splprep, splev
 from scipy.optimize import minimize
 import time
 
-class LongitudinalController:
+from utils import get_config
+
+class LongitudinalControllerBase:
     '''
     Longitudinal Control using a PID Controller
 
@@ -119,3 +121,10 @@ class LongitudinalController:
             return False
         except:
             return True
+
+config = get_config()
+if config['longitudinal_controller']['module'] == 'pid':
+    params = config['longitudinal_controller']['params']
+    LongitudinalController = lambda: LongitudinalControllerBase(**params)
+else:
+    raise ValueError('Unknown lane detection module')

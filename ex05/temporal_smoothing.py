@@ -4,7 +4,7 @@ from scipy.interpolate import splev, splprep
 
 class SplineRefiner:
     @staticmethod
-    def smooth_boundary(new_tck, old_tck, alpha=0.8, resolution=10, max_deviation=50.0):
+    def smooth_boundary(new_tck, old_tck, alpha=0.3, resolution=50, max_deviation=50.0):
         """
         Temporally smooths a spline tuple (tck) with outlier rejection.
 
@@ -33,11 +33,13 @@ class SplineRefiner:
             distances = np.linalg.norm(pts_new - pts_old, axis=0)
             avg_deviation = np.mean(distances)
 
-            if avg_deviation > max_deviation:
-                return old_tck
+            if avg_deviation > max_deviation * 0.5:
+                a1 = 0.1
+            else:
+                a1 = alpha
 
-            pts_smooth = (alpha * pts_new) + ((1 - alpha) * pts_old)
-            smoothed_tck, _ = splprep(pts_smooth, s=0, k=3)
+            pts_smooth = (a1 * pts_new) + ((1 - a1) * pts_old)
+            smoothed_tck, _ = splprep(pts_smooth, s=2, k=3)
 
             return smoothed_tck
 
