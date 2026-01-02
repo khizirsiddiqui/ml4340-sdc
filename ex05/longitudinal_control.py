@@ -66,6 +66,33 @@ class LongitudinalControllerBase:
         self.last_error = error
         return control
 
+    def MPC_step(self, speed, target_speed, dt=0.1):
+        '''
+        Perform one step of the MPC control
+        - Implement the descretized control law.
+        - Implement a maximum value for the sum of error you are using for the intgral term
+
+        args:
+            speed
+            target_speed
+        output:
+            control (u)
+        '''
+        def cost_function(u_seq):
+            sim_speed = speed
+            total_cost = 0
+            for u in u_seq:
+                sim_speed += u * dt
+                error = target_speed - sim_speed
+                total_cost += 1.3 * error**2 + 0.2 * u**2
+            return total_cost
+        initial_guess = [0.5] * 10
+        bounds = [(-0.8, 0.9)] * 10
+        result = minimize(cost_function, initial_guess, bounds=bounds)
+        optimal_u = result.x[0]
+        return optimal_u
+
+
     def control(self, speed, target_speed, time_step=0):
         '''
         Derive action values for gas and brake via the control signal
@@ -82,7 +109,8 @@ class LongitudinalControllerBase:
         '''
         if time_step < 50:
             return 0.9, 0.0
-        control = self.PID_step(speed, target_speed)
+        # control = self.PID_step(speed, target_speed)
+        control = self.MPC_step(speed, target_speed)
         brake = 0
         gas = 0
 
