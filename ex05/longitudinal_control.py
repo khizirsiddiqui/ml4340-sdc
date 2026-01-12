@@ -1,12 +1,22 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, welch, correlate
 from scipy.interpolate import splprep, splev
 from scipy.optimize import minimize
 import time
 
 from utils import get_config
+
+def is_oscillating(arr):
+    if len(arr) < 4:
+        return False, {}
+    methods = {}
+    # Method 1: Sign changes
+    sign_changes = np.sum(np.diff(np.sign(arr)) != 0)
+    methods['sign_changes'] = sign_changes
+    if sign_changes >= 4:
+        return True, methods
 
 class LongitudinalControllerBase:
     '''
@@ -16,7 +26,7 @@ class LongitudinalControllerBase:
         PID_step()
         control()
     '''
-    def __init__(self, KP=0.6, KD=0.01, KI=0.05, max_sum_error=1000):
+    def __init__(self, KP=0.6, KD=0.01, KI=0.05, max_sum_error=1000, controller_type='pid'):
         self.last_error = 0
         self.sum_error = 0
         self.max_sum_error = max_sum_error
@@ -26,6 +36,8 @@ class LongitudinalControllerBase:
         self.step_history = []
 
         self.filtered_derivative = 0
+
+        self.controller_type = controller_type
 
         # PID parameters
         self.KP = KP
@@ -78,6 +90,15 @@ class LongitudinalControllerBase:
         output:
             control (u)
         '''
+        # use last 50 speed values to estimate oscillation
+        if len(self.speed_history) >= 50:
+            recent_speeds = self.speed_history[-50:]
+            oscillating, methods = is_oscillating(recent_speeds)
+            if oscillating:
+                print("Oscillation detected by methods:", methods)
+                # reduce last control to dampen oscillations
+                self.last_control *= 0.7
+                return self.last_control
         def cost_function(u_seq):
             sim_speed = speed
             total_cost = 0
@@ -109,8 +130,10 @@ class LongitudinalControllerBase:
         '''
         if time_step < 50:
             return 0.9, 0.0
-        # control = self.PID_step(speed, target_speed)
-        control = self.MPC_step(speed, target_speed)
+        if self.controller_type == 'pid':
+            control = self.PID_step(speed, target_speed)
+        elif self.controller_type == 'mpc':
+            control = self.MPC_step(speed, target_speed)
         brake = 0
         gas = 0
 
@@ -152,7 +175,7 @@ class LongitudinalControllerBase:
             return True
 
 config = get_config()
-if config['longitudinal_controller']['module'] == 'pid':
+if config['longitudinal_controller']['module'] in ['pid', 'mpc']:
     params = config['longitudinal_controller']['params']
     LongitudinalController = lambda: LongitudinalControllerBase(**params)
 else:

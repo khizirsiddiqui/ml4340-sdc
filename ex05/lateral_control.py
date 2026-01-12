@@ -39,12 +39,16 @@ class LateralController:
             return 0.0
         car_position = np.array(car_pos)
 
-        path_vector = waypoints[:, 1] - waypoints[:, 0]
-        orientation_error = np.arctan2(path_vector[0], path_vector[1])
-
+        path_vector = waypoints[:, 2] - waypoints[:, 1]
+        orientation_error = np.arctan2(path_vector[0], path_vector[1]) - np.pi
+        # normalize to [-pi, pi]
+        while orientation_error > np.pi:
+            orientation_error -= 2 * np.pi
+        print("DEBUG: orientation_error =", orientation_error * 180 / np.pi)
         # derive stanley control law
         effective_gain = self.gain_constant
         cross_track_error = distance_point_to_line(car_position, waypoints.T)
+        print("DEBUG: cross_track_error =", cross_track_error)
         if np.abs(cross_track_error) < 5:
             cte_effect = 0
         else:
@@ -56,6 +60,7 @@ class LateralController:
 
         steering_angle = stanley_term - damping_term
         steering_angle = np.clip(steering_angle, -0.4, 0.4)
+        print("DEBUG: steering_angle =", steering_angle * 180 / np.pi)
         self.previous_steering_angle = steering_angle
         return steering_angle
 

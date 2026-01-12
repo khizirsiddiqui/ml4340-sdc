@@ -86,10 +86,10 @@ while not control_status.quit:
         print("\naction " + str(["{:+0.2f}".format(x) for x in a]))
         print("speed {:+0.2f} targetspeed {:+0.2f}".format(speed, target_speed))
 
-        # LD_module.plot_state_lane(s, steps, fig, waypoints=waypoints)
-        closed_pygame_window = LongC_module.plot_speed(speed, target_speed, steps, fig)
-        if closed_pygame_window:
-            break
+        LD_module.plot_state_lane(s, steps, fig, waypoints=waypoints)
+        # closed_pygame_window = LongC_module.plot_speed(speed, target_speed, steps, fig)
+        # if closed_pygame_window:
+        #     break
 
     steps += 1
 

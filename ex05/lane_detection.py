@@ -200,57 +200,50 @@ class LaneFindingSlidingWindow(LaneFindingVanilla):
         lane_1_windows = []
         lane_2_windows = []
         window_height = 10
-        window_width = 20
-        # lane 1
-        while True:
-            last_point = lane_boundary1_points[-1]
-            window_y_min = last_point[1] + 1
-            window_y_max = min(last_point[1] + window_height, cut_size - 1)
-            window_x_min = max(last_point[0] - window_width // 2, 0)
-            window_x_max = min(last_point[0] + window_width // 2, 95)
-            lane_1_windows.append((window_x_min, window_x_max, window_y_min, window_y_max))
+        window_width = 10
 
-            # find maxima in the window
-            window_maxima = [maximum for maximum in maxima if
-                             window_x_min <= maximum[0] <= window_x_max and
-                             window_y_min <= maximum[1] <= window_y_max]
+        def get_lane_points(starting_point, maximas, window_size, lane_windows):
+            lane_points = [starting_point]
+            current_point = starting_point
+            while True:
+                last_x, last_y = current_point[0], current_point[1]
+                next_y = last_y + window_size
+                if next_y >= cut_size:
+                    break
+                window_x_min = max(last_x - window_size // 2, 0)
+                window_x_max = min(last_x + window_size // 2, gradient_sum.shape[1]-1)
+                window_y_min = max(last_y - window_size // 2, 0)
+                window_y_max = min(last_y + window_size // 2, cut_size-1)
+                plt_rect = ((window_x_min, window_y_min), (window_x_max - window_x_min), (window_y_max - window_y_min))
+                lane_windows.append(plt_rect)
 
-            if len(window_maxima) == 0:
-                break
+                # find points at maxima closest to the current point in the window
+                # select point which is not in the lane_points array yet
+                candidates = [m for m in maximas if window_y_min <= m[1] <= window_y_max and window_x_min <= m[0] <= window_x_max]
+                if not candidates:
+                    break
+                min_distance = float('inf')
+                next_point = None
+                for c in candidates:
+                    if any((c == np.array(p)).all() for p in lane_points):
+                        continue
+                    distance = np.sqrt((c[0] - last_x) ** 2 + (c[1] - last_y) ** 2)
+                    if distance < min_distance:
+                        min_distance = distance
+                        next_point = c
+                if next_point is None:
+                    break
+                lane_points.append(next_point)
+                current_point = next_point
+            return np.array(lane_points)
 
-            # choose the closest maxima to the center of the window
-            center_x = (window_x_min + window_x_max) / 2
-            distances = [abs(maximum[0] - center_x) for maximum in window_maxima]
-            min_distance_index = np.argmin(distances)
-            lane_boundary1_points = np.vstack((lane_boundary1_points, window_maxima[min_distance_index]))
-            maxima.remove(window_maxima[min_distance_index])
-        # lane 2
-        while True:
-            last_point = lane_boundary2_points[-1]
-            window_y_min = last_point[1] + 1
-            window_y_max = min(last_point[1] + window_height, cut_size - 1)
-            window_x_min = max(last_point[0] - window_width // 2, 0)
-            window_x_max = min(last_point[0] + window_width // 2, 95)
-            lane_2_windows.append((window_x_min, window_x_max, window_y_min, window_y_max))
-
-            # find maxima in the window
-            window_maxima = [maximum for maximum in maxima if
-                             window_x_min <= maximum[0] <= window_x_max and
-                             window_y_min <= maximum[1] <= window_y_max]
-
-            if len(window_maxima) == 0:
-                break
-
-            # choose the closest maxima to the center of the window
-            center_x = (window_x_min + window_x_max) / 2
-            distances = [abs(maximum[0] - center_x) for maximum in window_maxima]
-            min_distance_index = np.argmin(distances)
-            lane_boundary2_points = np.vstack((lane_boundary2_points, window_maxima[min_distance_index]))
-            maxima.remove(window_maxima[min_distance_index])
+        if lane_found:
+            lane_boundary1_points = get_lane_points(lane_boundary1_points[0], maxima, window_height, lane_1_windows)
+            lane_boundary2_points = get_lane_points(lane_boundary2_points[0], maxima, window_height, lane_2_windows)
+            lane_boundary1_points = remove_duplicates(lane_boundary1_points)
+            lane_boundary2_points = remove_duplicates(lane_boundary2_points)
 
         self.window_history.append((gradient_sum, lane_1_windows, lane_2_windows))
-        lane_boundary1_points = remove_duplicates(lane_boundary1_points)
-        lane_boundary2_points = remove_duplicates(lane_boundary2_points)
         return lane_boundary1_points, lane_boundary2_points, lane_found
 
     def plot_window_gift(self, filename):
@@ -261,10 +254,8 @@ class LaneFindingSlidingWindow(LaneFindingVanilla):
             draw = ImageDraw.Draw(pil_image)
 
             for window in lane_1_windows:
-                draw.rectangle([window[0], window[2], window[1], window[3]], outline="red")
-            #
-            # for window in lane_2_windows:
-            #     draw.rectangle([window[0], window[2], window[1], window[3]], outline="blue")
+                winxy, winw, winh = window
+                draw.rectangle([winxy, (winxy[0]+winw, winxy[1]+winh)], outline="red")
 
             pil_images.append(pil_image.convert("P"))
 
@@ -305,12 +296,6 @@ class LaneFindingContourMethod:
         )
         lane_mask = lane_mask_bool.astype(np.uint8)
         self.lane_mask = lane_mask
-        # flip the mask for correct orientation - upside down
-        for row in range(lane_mask.shape[0] // 2):
-            temp = np.copy(lane_mask[row, :])
-            lane_mask[row, :] = lane_mask[lane_mask.shape[0] - 1 - row, :]
-            lane_mask[lane_mask.shape[0] - 1 - row, :] = temp
-        # self.save_lane_mask()
         return lane_mask, None, None
 
     def save_lane_mask(self):
@@ -323,41 +308,19 @@ class LaneFindingContourMethod:
         plt.savefig(f'lane_mask_{self.img_idx:04d}.png', bbox_inches='tight', pad_inches=0)
         self.img_idx += 1
 
-    def find_lanes(self, img):
-        # Label connected components (equivalent to RETR_EXTERNAL contours)
-        structure = np.ones((3,3), dtype=np.uint8)  # 8-connectivity
-        labels, num_labels = ndimage.label(lane_mask, structure=structure)
-
-        # Process each labeled region
-        for i in range(1, num_labels + 1):  # Skip background (label 0)
-            # Create mask for this specific region
-            region_mask = (labels == i)
-            area = np.sum(region_mask)
-            if area < self.min_area:
-                # Fill with black (0) - remove small contours
-                lane_mask[region_mask] = 0
-            elif self.lane_area_min <= area <= self.lane_area_max:
-                # Fill with white (255) - keep valid lane contours
-                lane_mask[region_mask] = 1
-            # else: leave unchanged (contours outside both ranges remain as-is)
-
-        self.lane_mask = lane_mask
-        return lane_mask, labels, num_labels
-        plt.gcf().clear()
-        lane_mask, labels, num_labels = self.find_lane_mask(img)
-        plt.imshow(self.lane_mask, cmap='gray')
-        for i in range(1, num_labels + 1):
-            region_mask = (labels == i)
-            area = np.sum(region_mask)
-            if self.lane_area_min <= area <= self.lane_area_max:
-                coords = np.column_stack(np.where(region_mask))
-                plt.scatter(coords[:, 1], coords[:, 0], s=1, color='red' if i == 1 else 'blue')
-        plt.axis('off')
-        plt.xlim((-0.5,95.5))
-        plt.ylim((-0.5,64.5))
-        plt.gca().axes.get_xaxis().set_visible(False)
-        plt.gca().axes.get_yaxis().set_visible(False)
-        plt.savefig('contour_debug.png', bbox_inches='tight', pad_inches=0)
+    def find_lanes_from_maxima(self, gradient, base):
+        from scipy.ndimage import label
+        print("gradient sum:", gradient.sum())
+        labels, num_features = label(gradient)
+        print("labels unique:", np.unique(labels))
+        lane1 = np.column_stack(np.where(labels == 1))
+        lane2 = np.column_stack(np.where(labels == 2))
+        lane1 = lane1[:, ::-1]
+        lane2 = lane2[:, ::-1]
+        # flip the points upside down
+        lane1[:, 1] = base.cut_size - lane1[:, 1] - 1
+        lane2[:, 1] = base.cut_size - lane2[:, 1] - 1
+        return lane1, lane2, num_features >= 2
 
 class LaneDetectionBase:
     '''
@@ -391,6 +354,22 @@ class LaneDetectionBase:
             self.FindLanes = LaneFindingVanilla()
         self.testMethod = LaneFindingContourMethod()
 
+        self.sensor_series = {'gyro': [], 'steering': [], 'speed': []}
+
+    def get_gradient(self, obs):
+        out, _, _ = self.testMethod.find_lane_mask(obs)
+        return out
+
+    def get_sensor_values(self, obs):
+        # convert to grayscale
+        gyro = obs[21:26, 2:10].mean()
+        self.sensor_series['gyro'].append(gyro)
+
+    def is_rotating(self, window=10, gyro_thresh=0.3):
+        recent = np.mean(self.sensor_series['gyro'][-window:])
+        print("Recent gyro mean:", recent)
+        return recent > gyro_thresh
+
     def cut_gray(self, state_image_full):
         '''
         This function should cut the image at the front end of the car (e.g. pixel row 65)
@@ -404,11 +383,7 @@ class LaneDetectionBase:
 
         '''
         # crops out the area above self.cut_size
-        cut_image = state_image_full[:self.cut_size, :, :]
-        out, _, _ = self.testMethod.find_lane_mask(cut_image)
-        return out
-
-
+        return state_image_full[:self.cut_size, :]
 
     def edge_detection(self, gray_image):
         '''
@@ -429,7 +404,7 @@ class LaneDetectionBase:
         gradient_sum = ( gradient_x + gradient_y ) * 255.0
         gradient_sum[gradient_sum < self.gradient_threshold / 255] = 0
         gradient_sum[gradient_sum >= self.gradient_threshold / 255] = int(1)
-        gradient_sum = gaussian_filter1d(gradient_sum, sigma=2)
+        # gradient_sum = gaussian_filter1d(gradient_sum, sigma=2)
         return gradient_sum
 
     def save_gradient_frames_as_gif(self, filename):
@@ -443,12 +418,13 @@ class LaneDetectionBase:
         for frame in self.gradient_frames:
             img = (frame * 255).astype(np.uint8)
             pil_image = Image.fromarray(img)
+            # flip the gradient frames for correct orientation - upside down
+            # pil_image = pil_image.transpose(method=Image.FLIP_TOP_BOTTOM)
             pil_images.append(pil_image.convert("P"))
         pil_images[0].save(
             filename,
             save_all=True,
             append_images=pil_images[1:],
-            duration=100,
             loop=0
         )
 
@@ -466,18 +442,39 @@ class LaneDetectionBase:
         '''
         if time_step < 50:
             return self.lane_boundary1_old, self.lane_boundary2_old
-        # self.testMethod.find_lanes(state_image_full)
+        # if rotating, use previous lane boundaries directly for a more stable behavior
+        gradient_img = self.get_gradient(state_image_full)
+        # self.get_sensor_values(gradient_img)
+        # if self.is_rotating():
+        #     print("WARNING! Rotating - using previous lane boundaries")
         # to gray
-        gray_state = self.cut_gray(state_image_full)
+        gray_state = self.cut_gray(gradient_img)
         # debug:
-        # plt.imshow(gray_state[::-1].squeeze(), cmap='gray')
+        # plt.imshow(gradient_img[:self.cut_size, :].squeeze(), cmap='gray')
         # edge detection via gradient sum and thresholding
         gradient_sum = self.edge_detection(gray_state)
         self.gradient_frames.append(gradient_sum)
         # debug:
+        # plot the gradient sum next to gray state in a 2x1 figure
+        if time_step % 301 == 0:
+            plt.figure(figsize=(8, 6))
+            plt.subplot(1, 2, 1)
+            plt.title("Gray State Image")
+            plt.imshow(gray_state.squeeze(), cmap='gray')
+            plt.axis('off')
+            plt.subplot(1, 2, 2)
+            plt.title("Gradient Sum Image")
+            plt.imshow(gradient_sum.squeeze(), cmap='gray')
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f'out_lane_detection_debug_{time_step}.png')
+            plt.close()
+
+        # debug:
         # plt.imshow(gradient_sum[::-1].squeeze(), cmap='gray')
         if self.kwargs.get('sliding_window', False) and time_step > 50:
-            lane_boundary1_points, lane_boundary2_points, lane_found = self.FindLanes.find_lanes_from_maxima(gradient_sum, self)
+            # lane_boundary1_points, lane_boundary2_points, lane_found = self.FindLanes.find_lanes_from_maxima(gradient_sum, self)
+            lane_boundary1_points, lane_boundary2_points, lane_found = self.testMethod.find_lanes_from_maxima(gradient_sum, self)
         else:
             lane_boundary1_points, lane_boundary2_points, lane_found = LaneFindingVanilla().find_lanes_from_maxima(gradient_sum, self)
 
@@ -487,17 +484,23 @@ class LaneDetectionBase:
             #
             # if there are more lane_boundary points points than spline parameters
             # else use perceding spline
-            if lane_boundary1_points.shape[0] > 4 and lane_boundary2_points.shape[0] > 4:
-                #### KHIZIR: Ideas for improvements
+            try:
+                def get_smooth_param(num_points):
+                    smoothness = self.spline_smoothness * num_points
+                    if num_points < 5:
+                        smoothness = 1000.0
+                    return smoothness
+
                 lane_boundary1, _ = splprep(
                         [lane_boundary1_points[:, 0], lane_boundary1_points[:, 1]],
-                        s=self.spline_smoothness * lane_boundary1_points.shape[0]
+                        s=get_smooth_param(lane_boundary1_points.shape[0])
                 )
                 lane_boundary2, _ = splprep(
                         [lane_boundary2_points[:, 0], lane_boundary2_points[:, 1]],
-                        s=self.spline_smoothness * lane_boundary2_points.shape[0]
+                        s=get_smooth_param(lane_boundary2_points.shape[0])
                 )
-            else:
+            except Exception as e:
+                print("WARNING: Spline fitting failed, using previous spline. Error:", e)
                 lane_boundary1 = self.lane_boundary1_old
                 lane_boundary2 = self.lane_boundary2_old
             ################
@@ -521,6 +524,7 @@ class LaneDetectionBase:
 
         # lane1 and lane2 swap check
         if self.lane_boundary1_old[1] is not None and self.lane_boundary2_old[1] is not None:
+            # the new lane boundaries should be close to the old ones
             t_test = np.linspace(0, 1, 6)
             lane1_points_test = np.array(splev(t_test, lane_boundary1))
             lane2_points_test = np.array(splev(t_test, lane_boundary2))
@@ -546,17 +550,21 @@ class LaneDetectionBase:
         '''
         if steps < 50:
             return False
-        # evaluate spline for 6 different spline parameters.
-        t = np.linspace(0, 1, 6)
-        lane_boundary1_points_points = np.array(splev(t, self.lane_boundary1_old))
-        lane_boundary2_points_points = np.array(splev(t, self.lane_boundary2_old))
-
         plt.gcf().clear()
+        try:
+            t = np.linspace(0, 1, 6)
+            lane_boundary1_points_points = np.array(splev(t, self.lane_boundary1_old))
+            lane_boundary2_points_points = np.array(splev(t, self.lane_boundary2_old))
+            plt.plot(lane_boundary1_points_points[0], lane_boundary1_points_points[1]+96-self.cut_size, linewidth=5, color='blue')
+            plt.plot(lane_boundary2_points_points[0], lane_boundary2_points_points[1]+96-self.cut_size, linewidth=5, color='orange')
+        except:
+            print("WARNING: Plotting lane boundaries failed")
+            pass
+
         plt.imshow(state_image_full[::-1])
-        plt.plot(lane_boundary1_points_points[0], lane_boundary1_points_points[1]+96-self.cut_size, linewidth=5, color='blue')
-        plt.plot(lane_boundary2_points_points[0], lane_boundary2_points_points[1]+96-self.cut_size, linewidth=5, color='orange')
         if len(waypoints):
-            plt.scatter(waypoints[0], waypoints[1]+96-self.cut_size, color='white')
+            plt.scatter(waypoints[0], waypoints[1] + 96 - self.cut_size, color='white')
+        plt.gca().add_patch(plt.Rectangle((21, 2), 5, 8, edgecolor='red', facecolor='none'))
 
         plt.axis('off')
         plt.xlim((-0.5,95.5))
