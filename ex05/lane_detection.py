@@ -267,60 +267,104 @@ class LaneFindingSlidingWindow(LaneFindingVanilla):
             loop=0
         )
 
-class LaneFindingContourMethod:
+class LaneFindingContour:
     def __init__(self):
-        self.color_dist = {'Lane': {'Lower': np.array([0, 0, 90]), 'Upper': np.array([10, 10, 120])}}
-        self.min_area = 20
-        self.lane_area_min = 600
-        self.lane_area_max = 5000
-        self.img = None
-        self.img_HSV = None
-        self.lane_mask = None
-        self.img_idx = 0
+        # Approximate colors for CarRacing-v2
+        pass
 
-    def to_hsv(self, img):
-        pil_img = Image.fromarray(img)
-        pil_img_hsv = pil_img.convert("HSV")
-        img_hsv = np.array(pil_img_hsv)
-        return img_hsv
-
-    def find_lane_mask(self, img):
-        self.img = img
-        self.img_HSV = self.to_hsv(self.img)
-        lower = self.color_dist['Lane']['Lower']
-        upper = self.color_dist['Lane']['Upper']
-        lane_mask_bool = (
-                (self.img_HSV[..., 0] >= lower[0]) & (self.img_HSV[..., 0] <= upper[0]) &
-                (self.img_HSV[..., 1] >= lower[1]) & (self.img_HSV[..., 1] <= upper[1]) &
-                (self.img_HSV[..., 2] >= lower[2]) & (self.img_HSV[..., 2] <= upper[2])
-        )
-        lane_mask = lane_mask_bool.astype(np.uint8)
-        self.lane_mask = lane_mask
-        return lane_mask, None, None
-
-    def save_lane_mask(self):
-        plt.imshow(self.lane_mask, cmap='gray')
-        plt.axis('off')
-        plt.xlim((-0.5,95.5))
-        plt.ylim((-0.5,64.5))
-        plt.gca().axes.get_xaxis().set_visible(False)
-        plt.gca().axes.get_yaxis().set_visible(False)
-        plt.savefig(f'lane_mask_{self.img_idx:04d}.png', bbox_inches='tight', pad_inches=0)
-        self.img_idx += 1
+    def get_road_mask(self, img):
+        # img is HxWx3 (RGB) or HxWx1 (Gray)
+        
+        # Heuristic for Road: Gray-ish color.
+        # Grass (Green) vs Road (Gray)
+        
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            r = img[..., 0].astype(int)
+            g = img[..., 1].astype(int)
+            b = img[..., 2].astype(int)
+            
+            # Grass Detection: Green is dominant
+            # is_grass = (g > r + 10) & (g > b + 10)
+            
+            # Road Detection (Grayish)
+            # R ~ G ~ B. Let's use a tight tolerance.
+            is_road_gray = (np.abs(r - g) < 10) & (np.abs(g - b) < 10) & (r > 40)
+            
+            # Create binary mask
+            mask = is_road_gray.astype(np.uint8)
+            
+        else:
+            mask = (img > 50).astype(np.uint8)
+            
+        return mask
 
     def find_lanes_from_maxima(self, gradient, base):
-        from scipy.ndimage import label
-        print("gradient sum:", gradient.sum())
-        labels, num_features = label(gradient)
-        print("labels unique:", np.unique(labels))
-        lane1 = np.column_stack(np.where(labels == 1))
-        lane2 = np.column_stack(np.where(labels == 2))
-        lane1 = lane1[:, ::-1]
-        lane2 = lane2[:, ::-1]
-        # flip the points upside down
-        lane1[:, 1] = base.cut_size - lane1[:, 1] - 1
-        lane2[:, 1] = base.cut_size - lane2[:, 1] - 1
-        return lane1, lane2, num_features >= 2
+        # gradient is the edge-detected image of our road mask.
+        
+        lane1_points = []
+        lane2_points = []
+        
+        height, width = gradient.shape
+        center_x = 48
+        
+        for y in range(height):
+            # Find non-zero pixels (edges)
+            row_activations = np.where(gradient[y] > 0)[0]
+            
+            if len(row_activations) == 0:
+                continue
+            
+            # Leftmost point
+            l_cand = row_activations[0]
+            # Rightmost point
+            r_cand = row_activations[-1]
+            
+            if l_cand < r_cand - 2: # At least some gap
+                lane1_points.append([l_cand, y])
+                lane2_points.append([r_cand, y])
+            elif len(row_activations) == 1:
+                if l_cand < center_x:
+                    lane1_points.append([l_cand, y])
+                else:
+                    lane2_points.append([l_cand, y])
+                    
+        lane1_arr = np.array(lane1_points) if len(lane1_points) > 0 else np.array([[0,0]])
+        lane2_arr = np.array(lane2_points) if len(lane2_points) > 0 else np.array([[width-1, 0]])
+        
+        if len(lane1_arr.shape) < 2: lane1_arr = np.array([[0,0]])
+        if len(lane2_arr.shape) < 2: lane2_arr = np.array([[width-1,0]])
+        
+        return lane1_arr, lane2_arr, True
+
+    def find_lane_mask(self, obs):
+        mask = self.get_road_mask(obs)
+        
+        # Cleanup using scipy.ndimage
+        mask = ndimage.binary_closing(mask, structure=np.ones((3,3))).astype(np.uint8)
+        
+        labels, num_features = ndimage.label(mask)
+        
+        if num_features > 0:
+            # Try to find the label at the bottom center
+            bottom_slice = labels[-10:, 30:66] 
+            relevant_labels = np.unique(bottom_slice)
+            relevant_labels = relevant_labels[relevant_labels > 0]
+            
+            if len(relevant_labels) > 0:
+                best_label = -1
+                max_size = 0
+                for l in relevant_labels:
+                    size = np.sum(labels == l)
+                    if size > max_size:
+                        max_size = size
+                        best_label = l
+                mask = (labels == best_label).astype(np.uint8)
+            else:
+                sizes = ndimage.sum(mask, labels, range(num_features + 1))
+                best_label = np.argmax(sizes[1:]) + 1
+                mask = (labels == best_label).astype(np.uint8)
+        
+        return mask * 255, None, None
 
 class LaneDetectionBase:
     '''
@@ -352,7 +396,7 @@ class LaneDetectionBase:
             self.FindLanes = LaneFindingSlidingWindow()
         else:
             self.FindLanes = LaneFindingVanilla()
-        self.testMethod = LaneFindingContourMethod()
+        self.testMethod = LaneFindingContour()
 
         self.sensor_series = {'gyro': [], 'steering': [], 'speed': []}
 
@@ -472,11 +516,9 @@ class LaneDetectionBase:
 
         # debug:
         # plt.imshow(gradient_sum[::-1].squeeze(), cmap='gray')
-        if self.kwargs.get('sliding_window', False) and time_step > 50:
-            # lane_boundary1_points, lane_boundary2_points, lane_found = self.FindLanes.find_lanes_from_maxima(gradient_sum, self)
-            lane_boundary1_points, lane_boundary2_points, lane_found = self.testMethod.find_lanes_from_maxima(gradient_sum, self)
-        else:
-            lane_boundary1_points, lane_boundary2_points, lane_found = LaneFindingVanilla().find_lanes_from_maxima(gradient_sum, self)
+        
+        # Always use the contour method (testMethod) as it is the improved version
+        lane_boundary1_points, lane_boundary2_points, lane_found = self.testMethod.find_lanes_from_maxima(gradient_sum, self)
 
         if lane_found:
             # spline fitting using scipy.interpolate.splprep
