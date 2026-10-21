@@ -40,7 +40,7 @@ class LateralController:
         car_position = np.array(car_pos)
 
         path_vector = waypoints[:, 2] - waypoints[:, 1]
-        orientation_error = np.arctan2(path_vector[0], path_vector[1]) - np.pi
+        orientation_error = np.arctan2(path_vector[0], path_vector[1])
         # normalize to [-pi, pi]
         while orientation_error > np.pi:
             orientation_error -= 2 * np.pi

@@ -15,7 +15,7 @@ fi
 
 echo ">> Evaluating model"
 t1=$(date +%s)
-python3 $SCRIPT_PY $SCORE $NO_DISPLAY
+python $SCRIPT_PY $SCORE $NO_DISPLAY
 elapsed=$(( t1 - t0 ))
 echo "== Evaluation completed in $elapsed seconds."
 echo

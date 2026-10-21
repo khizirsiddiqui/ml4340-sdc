@@ -427,7 +427,7 @@ class LaneDetectionBase:
 
         '''
         # crops out the area above self.cut_size
-        return state_image_full[:self.cut_size, :]
+        return state_image_full[:self.cut_size, :][::-1]
 
     def edge_detection(self, gray_image):
         '''

@@ -39,7 +39,9 @@
 
 
 start_time=$(date +%s)
-singularity exec ~/sdc_gym_amd64.simg bash -x script.sh
+./setup_env.sh
+source .venv/bin/activate
+bash -x script.sh
 end_time=$(date +%s)
 total_elapsed=$((end_time - start_time))
 job_id=${SLURM_JOB_ID:-"N/A"}
